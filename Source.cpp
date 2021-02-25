@@ -80,18 +80,19 @@ class trans {
 public:
 	trans() : c{ 0,0 }, z(1), l{ 0,0 } {}
 	// クライアントのサイズ
+	point p; // クライアント左上座標
 	size c;
 	// ズーム
 	double z;
 	//　論理座標の注視点。これが画面上の中央に表示
 	point l;
 	void l2d(const point* p1, point* p2) const {
-		p2->x = c.w / 2 + (p1->x - l.x) * z;
-		p2->y = c.h / 2 + (p1->y - l.y) * z;
+		p2->x = p.x + c.w / 2 + (p1->x - l.x) * z;
+		p2->y = p.y + c.h / 2 + (p1->y - l.y) * z;
 	}
 	void d2l(const point* p1, point* p2) const {
-		p2->x = l.x + (p1->x - c.w / 2) / z;
-		p2->y = l.y + (p1->y - c.h / 2) / z;
+		p2->x = l.x + (p1->x - p.x - c.w / 2) / z;
+		p2->y = l.y + (p1->y - p.y - c.h / 2) / z;
 	}
 	void settransfromrect(const point* p1, const point* p2, const int margin) {
 		l.x = p1->x + (p2->x - p1->x) / 2;
@@ -117,8 +118,8 @@ public:
 	~node() {}
 	void paint(HDC hdc, const trans* t, const point* offset = nullptr) const {
 		if (del) return;
-		point p1 = { p.x - s.w / 2 + (offset ? offset->x : 0.0), p.y - s.h / 2 + (offset ? offset->y : 0.0) };
-		point p2 = { p.x + s.w / 2 + (offset ? offset->x : 0.0), p.y + s.h / 2 + (offset ? offset->y : 0.0) };
+		const point p1 = { p.x - s.w / 2 + (offset ? offset->x : 0.0), p.y - s.h / 2 + (offset ? offset->y : 0.0) };
+		const point p2 = { p.x + s.w / 2 + (offset ? offset->x : 0.0), p.y + s.h / 2 + (offset ? offset->y : 0.0) };
 		point p3, p4;
 		t->l2d(&p1, &p3);
 		t->l2d(&p2, &p4);
@@ -126,10 +127,20 @@ public:
 		HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
 		Rectangle(hdc, (int)p3.x, (int)p3.y, (int)p4.x, (int)p4.y);
 		SelectObject(hdc, hOldPen);
+		DeleteObject(hPen);
 		RECT rect{ (int)p3.x, (int)p3.y, (int)p4.x, (int)p4.y };
 		COLORREF oldColor = SetTextColor(hdc, select ? RGB(255, 0, 0) : RGB(0, 0, 0));
 		DrawText(hdc, name, -1, &rect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
 		SetTextColor(hdc, oldColor);
+		if (next) {
+			const point p1 = { p.x + (offset ? offset->x : 0.0), p.y + s.h / 2 + (offset ? offset->y : 0.0) };
+			const point p2 = { next->p.x + (offset ? offset->x : 0.0), next->p.y - next->s.h / 2 + (offset ? offset->y : 0.0) };
+			point p3, p4;
+			t->l2d(&p1, &p3);
+			t->l2d(&p2, &p4);
+			MoveToEx(hdc, (int)p3.x, (int)p3.y, 0);
+			LineTo(hdc, (int)p4.x, (int)p4.y);
+		}
 	}
 	bool hit(const point* p) const {
 		return
@@ -156,15 +167,6 @@ public:
 	void add(node* n) {
 		l.push_back(n);
 	}
-	void del(node* n) {
-		for (auto i = l.begin(); i != l.end();) {
-			if (*i == n) {
-				delete (*i);
-				l.erase(i);
-				break;
-			}
-		}
-	}
 	void clear() {
 		for (auto i : l) {
 			delete i;
@@ -188,10 +190,17 @@ public:
 			}
 		}
 	}
-	node* hit(const point* p) const {
-		for (auto i : l) {
-			if (i->hit(p))
-				return i;
+	node* hit(const point* p, const node* without = nullptr) const {
+		if (without) {
+			for (auto i : l) {
+				if (without != i && i->hit(p))
+					return i;
+			}
+		} else {
+			for (auto i : l) {
+				if (i->hit(p))
+					return i;
+			}
 		}
 		return 0;
 	}
@@ -279,6 +288,109 @@ public:
 			p2->y = 0.0;
 		}
 	}
+	void disconnectselectnode()
+	{
+		// まず繋げる
+		for (auto i : l) {
+			if (i->select) {
+			}
+			else {
+				if (i->next) {
+					if (i->next->select) {
+						node* next = i->next;
+						while (next) {
+							if (!next->select)
+							{
+								i->next = next;
+								break;
+							}
+							next = next->next;
+						}
+					}
+				}
+				if (i->prev) {
+					if (i->prev->select) {
+						node* prev = i->prev;
+						while (prev) {
+							if (!prev->select)
+							{
+								i->prev = prev;
+								break;
+							}
+							prev = prev->prev;
+						}
+					}
+				}
+				else {
+					normalization(i);
+				}
+			}
+		}
+		// 次に断ち切る
+		for (auto i : l) {
+			if (i->select) {
+				if (i->next) {
+					if (!i->next->select) {
+						i->next = nullptr;
+					}
+				}
+				if (i->prev) {
+					if (!i->prev->select) {
+						i->prev = nullptr;
+					}
+				}
+			} else {
+				if (i->next) {
+					if (i->next->select) {
+						i->next = nullptr;
+					}
+				}
+				if (i->prev) {
+					if (i->prev->select) {
+						i->prev = nullptr;
+					}
+				}
+			}
+		}
+	}
+	void insert(node *s) { // 指定したノードの下に選択したノードを入れ込む
+		if (s) {
+			point p1[] = {
+				{ s->p.x - s->s.w / 2,s->p.y - s->s.h / 2 },
+				{ s->p.x + s->s.w / 2,s->p.y - s->s.h / 2 },
+			};
+			node* prev = nullptr;
+			for (auto i : p1) {
+				prev = hit(&i, s);
+				if (prev) {
+					break;
+				}
+			}
+			if (prev) {
+				if (prev->next) {
+					node* last = s;
+					while (last->next)
+						last = last->next;
+					prev->next->prev = last;
+					last->next = prev->next;
+				}
+				s->prev = prev;
+				prev->next = s;
+				normalization(prev);
+			}
+		}
+	}
+	void normalization(node* n) {
+		node* prev = n;
+		if (!prev) return;
+		node* next = n->next;
+		while (next) {
+			next->p.x = prev->p.x;
+			next->p.y = prev->p.y + 100;
+			prev = next;
+			next = next->next;
+		}
+	}
 };
 
 enum Mode {
@@ -302,7 +414,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	static bool modify;
 	static UINT dragMsg;
 	static HWND hList;
-	static node* nn;
+	static node* nn; // 新規作成ノード
+	static node* dd; // ドラッグ中ノード
 	if (msg == dragMsg) {
 		static int nDragItem;
 		LPDRAGLISTINFO lpdli = (LPDRAGLISTINFO)lParam;
@@ -313,6 +426,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				nn = new node();
 				nn->s.w = 100;
 				nn->s.h = 50;
+				nn->select = true;
 				SendMessage(lpdli->hWnd, LB_GETTEXT, nDragItem, (LPARAM)nn->name);
 			}
 			return TRUE;
@@ -339,7 +453,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case DL_DROPPED:
 			if (nn) {
 				if (WindowFromPoint(lpdli->ptCursor) == hWnd) {
+					l.unselect();
 					l.add(nn);
+					l.insert(nn);
 				} else {
 					delete nn;
 				}
@@ -361,7 +477,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード2"));
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード3"));
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード4"));
-
 		mode = 0;
 		{
 			// test add node
@@ -387,10 +502,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			point p1{ (double)GET_X_LPARAM(lParam), (double)GET_Y_LPARAM(lParam) };
 			point p2;
 			t.d2l(&p1, &p2);
-			const node* n = l.hit(&p2);
-			if (n) {
-				if (!l.isselect(n)) {
-					l.select(n); // 選択されていないときは1つ選択する
+			dd = l.hit(&p2);
+			if (dd) {
+				if (!l.isselect(dd)) {
+					l.select(dd); // 選択されていないときは1つ選択する
 				}
 				InvalidateRect(hWnd, NULL, TRUE);
 				dragstartP = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
@@ -412,14 +527,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			if (dragjudge) {
 				l.selectoffsetmerge(&dragoffset);
 				dragjudge = false;
+				if (dd) l.insert(dd);
 			}
 			else {
-				const node* n = l.hit(&dragstartL);
-				if (n) {
-					l.select(n);
-					InvalidateRect(hWnd, NULL, TRUE);
-				}
+				if (dd) l.select(dd);
 			}
+			dd = nullptr;
 			dragoffset = { 0.0, 0.0 };
 		}
 		mode = none;
@@ -452,7 +565,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			dragoffset.x = p2.x - dragstartL.x;
 			dragoffset.y = p2.y - dragstartL.y;
 			if (abs(p1.x - dragstartP.x) >= DRAGJUDGEWIDTH || abs(p1.y - dragstartP.y) >= DRAGJUDGEWIDTH)
+			{
+				// ドラッグモードになった時は関係を断ち切る
+				l.disconnectselectnode();
 				dragjudge = true;
+			}
 			InvalidateRect(hWnd, NULL, TRUE);
 		}
 		else if (mode == rectselect) {
@@ -472,6 +589,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				Rectangle(hdc, (int)p1.x, (int)p1.y, (int)p2.x, (int)p2.y);
 				SetROP2(hdc, nOldRop);
 				SelectObject(hdc, hOldPen);
+				DeleteObject(hPen);
 				ReleaseDC(hWnd, hdc);
 			}
 		}
@@ -504,16 +622,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			HDC hdc = BeginPaint(hWnd, &ps);
 			HFONT hOldFont = (HFONT)SelectObject(hdc, hObjectFont);
 			l.paint(hdc, &t, mode == dragnode ? &dragoffset : nullptr);
-			if (nn) {
-				nn->paint(hdc, &t);
-			}
+			if (nn) nn->paint(hdc, &t);
 			SelectObject(hdc, hOldFont);
 			EndPaint(hWnd, &ps);
 		}
 		break;
 	case WM_SIZE:
 		MoveWindow(hList, 0, 0, POINT2PIXEL(128), HIWORD(lParam), 1);
-		t.c.w = LOWORD(lParam);
+		t.p.x = POINT2PIXEL(128);
+		t.p.y = 0;
+		t.c.w = LOWORD(lParam) - POINT2PIXEL(128);
 		t.c.h = HIWORD(lParam);
 		break;
 	case WM_COMMAND:
@@ -528,6 +646,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			InvalidateRect(hWnd, NULL, TRUE);
 			break;
 		case ID_DELETE:
+			l.disconnectselectnode();
 			l.del();
 			InvalidateRect(hWnd, NULL, TRUE);
 			break;
