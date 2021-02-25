@@ -1,7 +1,9 @@
 ﻿#pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#pragma comment(lib, "comctl32")
 
 #include <windows.h>
 #include <windowsx.h>
+#include <commctrl.h>
 #include <list>
 #include "resource.h"
 
@@ -13,6 +15,10 @@
 #define ID_ALLSELECT 1000
 #define ID_ALLUNSELECT 1001
 #define ID_DELETE 1002
+#define ID_HOMEPOSITION 1003
+#define DRAGJUDGEWIDTH POINT2PIXEL(4)
+#define FONT_NAME L"Yu Gothic UI"
+#define FONT_SIZE 12
 
 WCHAR szClassName[] = L"NoCode Editor";
 
@@ -70,7 +76,8 @@ struct size {
 	double h;
 };
 
-struct trans {
+class trans {
+public:
 	trans() : c{ 0,0 }, z(1), l{ 0,0 } {}
 	// クライアントのサイズ
 	size c;
@@ -86,9 +93,18 @@ struct trans {
 		p2->x = l.x + (p1->x - c.w / 2) / z;
 		p2->y = l.y + (p1->y - c.h / 2) / z;
 	}
+	void settransfromrect(const point* p1, const point* p2, const int margin) {
+		l.x = p1->x + (p2->x - p1->x) / 2;
+		l.y = p1->y + (p2->y - p1->y) / 2;
+		if (p2->x - p1->x == 0.0 || p2->y - p1->y == 0.0)
+			z = 1.0;
+		else
+			z = min((c.w - margin * 2) / (p2->x - p1->x), (c.h - margin * 2) / (p2->y - p1->y));
+	}
 };
 
-struct node {
+class node {
+public:
 	WCHAR name[16];
 	int k;
 	point p;
@@ -99,10 +115,10 @@ struct node {
 	bool del;
 	node() : k(0), next(0), prev(0), p{ 0.0, 0.0 }, s{ 0.0, 0.0 }, name{}, select(false), del(false) {}
 	~node() {}
-	void paint(HDC hdc, const trans* t) const {
+	void paint(HDC hdc, const trans* t, const point* offset = nullptr) const {
 		if (del) return;
-		point p1 = { p.x - s.w / 2, p.y - s.h / 2 };
-		point p2 = { p.x + s.w / 2, p.y + s.h / 2 };
+		point p1 = { p.x - s.w / 2 + (offset ? offset->x : 0.0), p.y - s.h / 2 + (offset ? offset->y : 0.0) };
+		point p2 = { p.x + s.w / 2 + (offset ? offset->x : 0.0), p.y + s.h / 2 + (offset ? offset->y : 0.0) };
 		point p3, p4;
 		t->l2d(&p1, &p3);
 		t->l2d(&p2, &p4);
@@ -133,8 +149,10 @@ struct node {
 	}
 };
 
-struct nodelist {
+class nodelist {
+public:
 	std::list<node*> l;
+	nodelist() {}
 	void add(node* n) {
 		l.push_back(n);
 	}
@@ -153,19 +171,31 @@ struct nodelist {
 		}
 		l.clear();
 	}
-	void paint(HDC hdc, trans* t) {
-		for (auto i : l) {
-			i->paint(hdc, t);
+	void paint(HDC hdc, trans* t, point* dragoffset = nullptr) {
+		if (dragoffset) {
+			for (auto i : l) {
+				if (!i->select)
+					i->paint(hdc, t);
+			}
+			for (auto i : l) {
+				if (i->select)
+					i->paint(hdc, t, dragoffset);
+			}
+		}
+		else {
+			for (auto i : l) {
+					i->paint(hdc, t);
+			}
 		}
 	}
-	node* hit(point* p) {
+	node* hit(const point* p) const {
 		for (auto i : l) {
 			if (i->hit(p))
 				return i;
 		}
 		return 0;
 	}
-	void select(node* n) { // 指定した一つのみ選択状態にする
+	void select(const node* n) { // 指定した一つのみ選択状態にする
 		for (auto i : l) {
 			i->select = (i == n);
 		}
@@ -192,6 +222,63 @@ struct nodelist {
 			}
 		}
 	}
+	int selectcount() const {
+		int count = 0;
+		for (auto i : l) {
+			if (i->select) {
+				count++;
+			}
+		}
+		return count;
+	}
+	bool isselect(const node* n) const {
+		for (auto i : l) {
+			if (i == n) {
+				return i->select;
+			}
+		}
+		return false;
+	}
+	void selectlistup(std::list<node*>* selectnode) const {
+		for (auto i : l) {
+			if (i->select) {
+				selectnode->push_back(i);
+			}
+		}
+	}
+	void selectoffsetmerge(const point* dragoffset) {
+		for (auto i : l) {
+			if (i->select) {
+				i->p.x += dragoffset->x;
+				i->p.y += dragoffset->y;
+			}
+		}
+	}
+	void allnodemargin(point* p1, point* p2) const {
+		p1->x = DBL_MAX;
+		p1->y = DBL_MAX;
+		p2->x = -DBL_MAX;
+		p2->y = -DBL_MAX;
+		for (auto i : l) {
+			if (!i->del) {
+				if (i->p.x - i->s.w / 2 < p1->x) p1->x = i->p.x - i->s.w / 2;
+				if (i->p.y - i->s.h / 2 < p1->y) p1->y = i->p.y - i->s.h / 2;
+				if (i->p.x + i->s.w / 2 > p2->x) p2->x = i->p.x + i->s.w / 2;
+				if (i->p.y + i->s.h / 2 > p2->y) p2->y = i->p.y + i->s.h / 2;
+			}
+		}
+		if (
+			p1->x == DBL_MAX ||
+			p1->y == DBL_MAX ||
+			p2->x == DBL_MIN ||
+			p2->y == DBL_MIN
+			) {
+			p1->x = 0.0;
+			p1->y = 0.0;
+			p2->x = 0.0;
+			p2->y = 0.0;
+		}
+	}
 };
 
 enum Mode {
@@ -203,17 +290,78 @@ enum Mode {
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	static HFONT hFont;
+	static HFONT hObjectFont, hUIFont;
 	static UINT uDpiX = DEFAULT_DPI, uDpiY = DEFAULT_DPI;
 	static trans t;
 	static nodelist l;
 	static int mode;
 	static POINT dragstartP;
 	static point dragstartL;
-	static node* node1;
+	static point dragoffset;
+	static bool dragjudge;
+	static bool modify;
+	static UINT dragMsg;
+	static HWND hList;
+	static node* nn;
+	if (msg == dragMsg) {
+		static int nDragItem;
+		LPDRAGLISTINFO lpdli = (LPDRAGLISTINFO)lParam;
+		switch (lpdli->uNotification) {
+		case DL_BEGINDRAG:
+			nDragItem = LBItemFromPt(lpdli->hWnd, lpdli->ptCursor, TRUE);
+			if (nDragItem != -1) {
+				nn = new node();
+				nn->s.w = 100;
+				nn->s.h = 50;
+				SendMessage(lpdli->hWnd, LB_GETTEXT, nDragItem, (LPARAM)nn->name);
+			}
+			return TRUE;
+		case DL_DRAGGING:
+			if (nn) {
+				POINT p0 = { lpdli->ptCursor.x, lpdli->ptCursor.y };
+				ScreenToClient(hWnd, &p0);
+				point p1{ (double)p0.x, (double)p0.y };
+				point p2;
+				t.d2l(&p1, &p2);
+				nn->p.x = p2.x;
+				nn->p.y = p2.y;
+				InvalidateRect(hWnd, NULL, TRUE);
+			}
+			return 0;
+		case DL_CANCELDRAG:
+			nDragItem = -1;
+			if (nn) {
+				delete nn;
+				nn = nullptr;
+			}
+			InvalidateRect(hWnd, NULL, TRUE);
+			break;
+		case DL_DROPPED:
+			if (nn) {
+				if (WindowFromPoint(lpdli->ptCursor) == hWnd) {
+					l.add(nn);
+				} else {
+					delete nn;
+				}
+			}
+			nn = nullptr;
+			nDragItem = -1;
+			InvalidateRect(hWnd, NULL, TRUE);
+			break;
+		}
+		return 0;
+	}
 	switch (msg)
 	{
 	case WM_CREATE:
+		dragMsg = RegisterWindowMessage(DRAGLISTMSGSTRING);
+		hList = CreateWindow(L"LISTBOX", 0, WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOINTEGRALHEIGHT, 0, 0, 0, 0, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
+		MakeDragList(hList);
+		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード1"));
+		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード2"));
+		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード3"));
+		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード4"));
+
 		mode = 0;
 		{
 			// test add node
@@ -239,19 +387,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			point p1{ (double)GET_X_LPARAM(lParam), (double)GET_Y_LPARAM(lParam) };
 			point p2;
 			t.d2l(&p1, &p2);
-			node* n = l.hit(&p2);
+			const node* n = l.hit(&p2);
 			if (n) {
-				l.select(n);
+				if (!l.isselect(n)) {
+					l.select(n); // 選択されていないときは1つ選択する
+				}
 				InvalidateRect(hWnd, NULL, TRUE);
 				dragstartP = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-				dragstartL = n->p;
+				dragstartL = p2;
 				mode = dragnode;
-				node1 = n;
 				SetCapture(hWnd);
-			}
-			else
-			{
-				//矩形選択モードに遷移
+			} else {
+				//矩形選択モード
 				l.unselect();
 				InvalidateRect(hWnd, NULL, TRUE);
 				dragstartP = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
@@ -261,6 +408,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 	case WM_LBUTTONUP:
+		if (mode == dragnode) {
+			if (dragjudge) {
+				l.selectoffsetmerge(&dragoffset);
+				dragjudge = false;
+			}
+			else {
+				const node* n = l.hit(&dragstartL);
+				if (n) {
+					l.select(n);
+					InvalidateRect(hWnd, NULL, TRUE);
+				}
+			}
+			dragoffset = { 0.0, 0.0 };
+		}
 		mode = none;
 		ReleaseCapture();
 		InvalidateRect(hWnd, NULL, TRUE);
@@ -286,8 +447,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 		else if (mode == dragnode) {
 			point p1{ (double)GET_X_LPARAM(lParam), (double)GET_Y_LPARAM(lParam) };
-			node1->p.x = dragstartL.x + (p1.x - dragstartP.x) / t.z;
-			node1->p.y = dragstartL.y + (p1.y - dragstartP.y) / t.z;
+			point p2;
+			t.d2l(&p1, &p2);
+			dragoffset.x = p2.x - dragstartL.x;
+			dragoffset.y = p2.y - dragstartL.y;
+			if (abs(p1.x - dragstartP.x) >= DRAGJUDGEWIDTH || abs(p1.y - dragstartP.y) >= DRAGJUDGEWIDTH)
+				dragjudge = true;
 			InvalidateRect(hWnd, NULL, TRUE);
 		}
 		else if (mode == rectselect) {
@@ -328,8 +493,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					return 0;
 				}
 			}
-			DeleteObject(hFont);
-			hFont = CreateFontW(-POINT2PIXEL((int)(10 * t.z)), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, L"MS Shell Dlg");
+			DeleteObject(hObjectFont);
+			hObjectFont = CreateFontW(-POINT2PIXEL((int)(FONT_SIZE * t.z)), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
 			InvalidateRect(hWnd, NULL, TRUE);
 		}
 		break;
@@ -337,13 +502,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		{
 			PAINTSTRUCT ps;
 			HDC hdc = BeginPaint(hWnd, &ps);
-			HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
-			l.paint(hdc, &t);
+			HFONT hOldFont = (HFONT)SelectObject(hdc, hObjectFont);
+			l.paint(hdc, &t, mode == dragnode ? &dragoffset : nullptr);
+			if (nn) {
+				nn->paint(hdc, &t);
+			}
 			SelectObject(hdc, hOldFont);
 			EndPaint(hWnd, &ps);
 		}
 		break;
 	case WM_SIZE:
+		MoveWindow(hList, 0, 0, POINT2PIXEL(128), HIWORD(lParam), 1);
 		t.c.w = LOWORD(lParam);
 		t.c.h = HIWORD(lParam);
 		break;
@@ -360,6 +529,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			break;
 		case ID_DELETE:
 			l.del();
+			InvalidateRect(hWnd, NULL, TRUE);
+			break;
+		case ID_HOMEPOSITION:
+			{
+				point p1, p2;
+				l.allnodemargin(&p1, &p2);
+				t.settransfromrect(&p1, &p2, POINT2PIXEL(10));
+			}
+			DeleteObject(hObjectFont);
+			hObjectFont = CreateFontW(-POINT2PIXEL((int)(FONT_SIZE * t.z)), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
 			InvalidateRect(hWnd, NULL, TRUE);
 			break;
 		}
@@ -380,12 +559,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		return DefWindowProc(hWnd, msg, wParam, lParam);
 	case WM_DPICHANGED:
 		GetScaling(hWnd, &uDpiX, &uDpiY);
-		DeleteObject(hFont);
-		hFont = CreateFontW(-POINT2PIXEL((int)(10 * t.z)), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, L"MS Shell Dlg");
+		DeleteObject(hObjectFont);
+		hObjectFont = CreateFontW(-POINT2PIXEL((int)(FONT_SIZE * t.z)), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
+		DeleteObject(hUIFont);
+		hUIFont = CreateFontW(-POINT2PIXEL(FONT_SIZE), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
+		SendMessage(hList, WM_SETFONT, (WPARAM)hUIFont, 0);
 		break;
 	case WM_DESTROY:
 		l.clear();
-		DeleteObject(hFont);
+		DeleteObject(hObjectFont);
+		DeleteObject(hUIFont);
 		PostQuitMessage(0);
 		break;
 	default:
@@ -429,6 +612,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		{FVIRTKEY | FCONTROL, 0x41, ID_ALLSELECT},
 		{FVIRTKEY, VK_ESCAPE, ID_ALLUNSELECT},
 		{FVIRTKEY, VK_DELETE, ID_DELETE},
+		{FVIRTKEY, VK_HOME, ID_HOMEPOSITION},
 	};
 	HACCEL hAccel = CreateAcceleratorTable(Accel, _countof(Accel));
 	while (GetMessage(&msg, 0, 0, 0))
@@ -442,3 +626,4 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 	DestroyAcceleratorTable(hAccel);
 	return (int)msg.wParam;
 }
+
