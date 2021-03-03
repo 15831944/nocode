@@ -112,6 +112,8 @@ enum NODE_KIND {
 };
 
 class node {
+private:
+	bool select;
 public:
 	WCHAR name[16];
 	int k;
@@ -119,12 +121,33 @@ public:
 	size s;
 	node* next;
 	node* prev;
-	bool select;
-	bool del;
-	node() : k(0), next{}, prev{}, p{ 0.0, 0.0 }, s{ 0.0, 0.0 }, name{}, select(false), del(false) {}
+	UINT64 born;
+	UINT64 dead;
+	node(UINT64 initborn) : k(0), next{}, prev{}, p{ 0.0, 0.0 }, s{ 0.0, 0.0 }, name{}, select(false), born(initborn), dead(UINT64_MAX) {}
+	node(const node* src, UINT64 initborn) {
+		select = src->select;
+		lstrcpy(name, src->name);
+		k = src->k;
+		p = src->p;
+		s = src->s;
+		next = src->next;
+		prev = src->prev;
+		born = initborn;
+		dead = UINT64_MAX;
+	}
 	~node() {}
-	virtual void paint(HDC hdc, const trans* t, const point* offset = nullptr) const {
-		if (del) return;
+	node* copy(UINT64 generation) const {
+		node* newnode = new node(this, generation);
+		return newnode;
+	}
+	virtual bool isalive(UINT64 generation) const {
+		return born <= generation && generation < dead;
+	}
+	virtual void kill(UINT64 generation) {
+		dead = generation;
+	}
+	virtual void paint(HDC hdc, const trans* t, UINT64 generation, const point* offset = nullptr) const {
+		if (!isalive(generation)) return;
 		const point p1 = { p.x - s.w / 2 + (offset ? offset->x : 0.0), p.y - s.h / 2 + (offset ? offset->y : 0.0) };
 		const point p2 = { p.x + s.w / 2 + (offset ? offset->x : 0.0), p.y + s.h / 2 + (offset ? offset->y : 0.0) };
 		point p3, p4;
@@ -139,7 +162,6 @@ public:
 		COLORREF oldColor = SetTextColor(hdc, select ? RGB(255, 0, 0) : RGB(0, 0, 0));
 		DrawText(hdc, name, -1, &rect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
 		SetTextColor(hdc, oldColor);
-
 		if (next) {
 			const point p1 = { p.x + (offset ? offset->x : 0.0), p.y + s.h / 2 + (offset ? offset->y : 0.0) };
 			const point p2 = { next->p.x + (offset ? offset->x : 0.0), next->p.y - next->s.h / 2 + (offset ? offset->y : 0.0) };
@@ -150,21 +172,29 @@ public:
 			util::DrawArrow(hdc, &p5, &p6, &t->z);
 		}
 	}
-	virtual bool hit(const point* p) const {
+	virtual bool hit(const point* p, UINT64 generation) const {
 		return
-			!del &&
+			isalive(generation) &&
 			p->x >= this->p.x - s.w / 2 &&
 			p->x <= this->p.x + s.w / 2 &&
 			p->y >= this->p.y - s.h / 2 &&
 			p->y <= this->p.y + s.h / 2;
 	}
-	virtual bool inrect(const point* p1, const point* p2) const {
+	virtual bool inrect(const point* p1, const point* p2, UINT64 generation) const {
 		return
-			!del &&
+			isalive(generation) &&
 			p.x - s.w / 2 >= p1->x &&
 			p.y - s.h / 2 >= p1->y &&
 			p.x + s.w / 2 <= p2->x &&
 			p.y + s.h / 2 <= p2->y;
+	}
+	virtual bool isselect(UINT64 generation) {
+		return select && isalive(generation);
+	}
+	virtual void setselect(bool b, UINT64 generation) {
+		if (isalive(generation)) {
+			select = b;
+		}
 	}
 };
 
@@ -181,103 +211,116 @@ public:
 		}
 		l.clear();
 	}
-	void paint(HDC hdc, trans* t, point* dragoffset = nullptr) {
+	void setbornanddead(UINT64 generation) {
+		for (auto i : l) {
+			if (i->born > generation) {
+				i->born = UINT64_MAX;
+			}
+			if (i->dead >= generation) {
+				i->dead = UINT64_MAX;
+			}
+		}
+	}
+	void paint(HDC hdc, trans* t, UINT64 generation, point* dragoffset = nullptr) {
 		if (dragoffset) {
 			for (auto i : l) {
-				if (!i->select)
-					i->paint(hdc, t);
+				if (!i->isselect(generation))
+					i->paint(hdc, t, generation);
 			}
 			for (auto i : l) {
-				if (i->select)
-					i->paint(hdc, t, dragoffset);
+				if (i->isselect(generation))
+					i->paint(hdc, t, generation, dragoffset);
 			}
 		}
 		else {
 			for (auto i : l) {
-					i->paint(hdc, t);
+				i->paint(hdc, t, generation);
 			}
 		}
 	}
-	node* hit(const point* p, const node* without = nullptr) const {
+	node* hit(const point* p, UINT64 generation, const node* without = nullptr) const {
 		if (without) {
 			for (auto i : l) {
-				if (without != i && i->hit(p))
+				if (without != i && i->hit(p, generation))
 					return i;
 			}
 		} else {
 			for (auto i : l) {
-				if (i->hit(p))
+				if (i->hit(p, generation))
 					return i;
 			}
 		}
 		return 0;
 	}
-	void select(const node* n) { // 指定した一つのみ選択状態にする
+	void select(const node* n, UINT64 generation) { // 指定した一つのみ選択状態にする
 		for (auto i : l) {
-			i->select = (i == n);
+			i->setselect(i == n, generation);
 		}
 	}
-	void unselect() {
+	void unselect(UINT64 generation) {
 		for (auto i : l) {
-			i->select = false;
+			i->setselect(false, generation);
 		}
 	}
-	void rectselect(const point* p1, const point* p2) {
+	void rectselect(const point* p1, const point* p2, UINT64 generation) {
 		for (auto i : l) {
-			i->select = i->inrect(p1, p2);
+			i->setselect(i->inrect(p1, p2, generation), generation);
 		}
 	}
-	void allselect() {
+	void allselect(UINT64 generation) {
 		for (auto i : l) {
-			i->select = true;
+			i->setselect(true, generation);
 		}
 	}
-	void del() {
+	void del(UINT64 generation) {
 		for (auto i : l) {
-			if (i->select) {
-				i->del = true;
+			if (i->isselect(generation)) {
+				i->dead = generation;
 			}
 		}
 	}
-	int selectcount() const {
+	int selectcount(UINT64 generation) const {
 		int count = 0;
 		for (auto i : l) {
-			if (i->select) {
+			if (i->isselect(generation)) {
 				count++;
 			}
 		}
 		return count;
 	}
-	bool isselect(const node* n) const {
+	bool isselect(const node* n, UINT64 generation) const {
 		for (auto i : l) {
 			if (i == n) {
-				return i->select;
+				return i->isselect(generation);
 			}
 		}
 		return false;
 	}
-	void selectlistup(std::list<node*>* selectnode) const {
+	void selectlistup(std::list<node*>* selectnode, UINT64 generation) const {
 		for (auto i : l) {
-			if (i->select) {
+			if (i->isselect(generation)) {
 				selectnode->push_back(i);
 			}
 		}
 	}
-	void selectoffsetmerge(const point* dragoffset) {
-		for (auto i : l) {
-			if (i->select) {
-				i->p.x += dragoffset->x;
-				i->p.y += dragoffset->y;
-			}
+	void selectoffsetmerge(const point* dragoffset, UINT64 generation) {
+		std::list<node*> selectnode;
+		selectlistup(&selectnode, generation);
+		for (auto i : selectnode) {
+			i->kill(generation);
+			node* newnode = new node(i, generation);
+			newnode->p.x += dragoffset->x;
+			newnode->p.y += dragoffset->y;
+			l.push_back(newnode);
 		}
 	}
-	void allnodemargin(point* p1, point* p2) const {
+	void allnodemargin(point* p1, point* p2, UINT64 generation) const {
 		p1->x = DBL_MAX;
 		p1->y = DBL_MAX;
 		p2->x = -DBL_MAX;
 		p2->y = -DBL_MAX;
 		for (auto i : l) {
-			if (!i->del) {
+			if (i->isalive(generation)) {
 				if (i->p.x - i->s.w / 2 < p1->x) p1->x = i->p.x - i->s.w / 2;
 				if (i->p.y - i->s.h / 2 < p1->y) p1->y = i->p.y - i->s.h / 2;
 				if (i->p.x + i->s.w / 2 > p2->x) p2->x = i->p.x + i->s.w / 2;
@@ -296,18 +339,18 @@ public:
 			p2->y = 0.0;
 		}
 	}
-	void disconnectselectnode()
+	void disconnectselectnode(UINT64 generation)
 	{
 		// まず繋げる
 		for (auto i : l) {
-			if (i->select) {
+			if (i->isselect(generation)) {
 			}
 			else {
 				if (i->next) {
-					if (i->next->select) {
+					if (i->next->isselect(generation)) {
 						node* next = i->next;
 						while (next) {
-							if (!next->select)
+							if (!next->isselect(generation))
 							{
 								i->next = next;
 								break;
@@ -317,10 +360,10 @@ public:
 					}
 				}
 				if (i->prev) {
-					if (i->prev->select) {
+					if (i->prev->isselect(generation)) {
 						node* prev = i->prev;
 						while (prev) {
-							if (!prev->select)
+							if (!prev->isselect(generation))
 							{
 								i->prev = prev;
 								break;
@@ -336,32 +379,32 @@ public:
 		}
 		// 次に断ち切る
 		for (auto i : l) {
-			if (i->select) {
+			if (i->isselect(generation)) {
 				if (i->next) {
-					if (!i->next->select) {
+					if (!i->next->isselect(generation)) {
 						i->next = nullptr;
 					}
 				}
 				if (i->prev) {
-					if (!i->prev->select) {
+					if (!i->prev->isselect(generation)) {
 						i->prev = nullptr;
 					}
 				}
 			} else {
 				if (i->next) {
-					if (i->next->select) {
+					if (i->next->isselect(generation)) {
 						i->next = nullptr;
 					}
 				}
 				if (i->prev) {
-					if (i->prev->select) {
+					if (i->prev->isselect(generation)) {
 						i->prev = nullptr;
 					}
 				}
 			}
 		}
 	}
-	void insert(node *s) { // 指定したノードの下に選択したノードを入れ込む
+	void insert(node *s, UINT64 generation) { // 指定したノードの下に選択したノードを入れ込む
 		if (s) {
 			point p1[] = {
 				{ s->p.x - s->s.w / 2,s->p.y - s->s.h / 2 },
@@ -369,7 +412,7 @@ public:
 			};
 			node* prev = nullptr;
 			for (auto i : p1) {
-				prev = hit(&i, s);
+				prev = hit(&i, generation, s);
 				if (prev) {
 					break;
 				}
@@ -406,6 +449,7 @@ enum Mode {
 	dragclient = 1,
 	dragnode = 2,
 	rectselect = 3,
+	rdown = 4,
 };
 
 class NoCodeApp {
@@ -423,6 +467,21 @@ public:
 	HWND hWnd;
 	UINT uDpiX, uDpiY;
 	node* nn; // 新規作成ノード
+	UINT64 generation;
+	UINT64 maxgeneration;
+
+	void beginedit() {
+		if (generation < maxgeneration)
+		{
+			l.setbornanddead(generation);
+			maxgeneration = generation + 1;
+		}
+		else
+		{
+			++maxgeneration;
+		}
+		generation = maxgeneration;
+	}
 
 	NoCodeApp(HWND hMainWnd)
 		:hObjectFont(0)
@@ -439,6 +498,8 @@ public:
 		, uDpiX(DEFAULT_DPI)
 		, uDpiY(DEFAULT_DPI)
 		, nn(nullptr)
+		, generation(0)
+		, maxgeneration(0)
 	{}
 
 	void resetFont() {
@@ -454,10 +515,10 @@ public:
 		point p1{ (double)x, (double)y };
 		point p2;
 		t.d2l(&p1, &p2);
-		dd = l.hit(&p2);
+		dd = l.hit(&p2, generation);
 		if (dd) {
-			if (!l.isselect(dd)) {
-				l.select(dd); // 選択されていないときは1つ選択する
+			if (!l.isselect(dd, generation)) {
+				l.select(dd, generation); // 選択されていないときは1つ選択する
 			}
 			dragstartP = { x, y };
 			dragstartL = p2;
@@ -465,7 +526,7 @@ public:
 		}
 		else {
 			//矩形選択モード
-			l.unselect();
+			l.unselect(generation);
 			dragstartP = { x, y };
 			mode = rectselect;
 		}
@@ -476,12 +537,13 @@ public:
 	void OnLButtonUp(int x, int y) {
 		if (mode == dragnode) {
 			if (dragjudge) {
-				l.selectoffsetmerge(&dragoffset);
+				beginedit();
+				l.selectoffsetmerge(&dragoffset, generation);
 				dragjudge = false;
-				if (dd) l.insert(dd);
+				if (dd) l.insert(dd, generation);
 			}
 			else {
-				if (dd) l.select(dd);
+				if (dd) l.select(dd, generation);
 			}
 			dd = nullptr;
 			dragoffset = { 0.0, 0.0 };
@@ -503,6 +565,44 @@ public:
 		ReleaseCapture();
 	}
 
+	void OnRButtonDown(int x, int y) {
+		point p1{ (double)x, (double)y };
+		point p2;
+		t.d2l(&p1, &p2);
+		dd = l.hit(&p2, generation);
+		if (dd) {
+			if (!l.isselect(dd, generation)) {
+				l.select(dd, generation); // 選択されていないときは1つ選択する
+			}
+			dragstartP = { x, y };
+			dragstartL = p2;
+		}
+		else {
+			l.unselect(generation);
+		}
+
+		mode = rdown;
+		InvalidateRect(hWnd, NULL, TRUE);
+		SetCapture(hWnd);
+	}
+
+	void OnRButtonUp(int x, int y) {
+		ReleaseCapture();
+		if (mode == rdown) {
+			POINT point = { x, y };
+			ClientToScreen(hWnd, &point);
+			HMENU hMenu;
+			if (l.selectcount(generation) > 0) {
+				hMenu = LoadMenu(GetModuleHandle(0), MAKEINTRESOURCE(IDR_NODEPOPUP));
+			} else {
+				hMenu = LoadMenu(GetModuleHandle(0), MAKEINTRESOURCE(IDR_CLIENTPOPUP));
+			}
+			HMENU hSubMenu = GetSubMenu(hMenu, 0);
+			TrackPopupMenu(hSubMenu, TPM_LEFTALIGN, point.x, point.y, 0, hWnd, NULL);
+		}
+		mode = none;
+	}
+
 	void OnMouseMove(int x, int y) {
 		if (mode == dragclient) {
 			point p1{ (double)x, (double)y };
@@ -519,7 +619,7 @@ public:
 			if (abs(p1.x - dragstartP.x) >= DRAGJUDGEWIDTH || abs(p1.y - dragstartP.y) >= DRAGJUDGEWIDTH)
 			{
 				// ドラッグモードになった時は関係を断ち切る
-				l.disconnectselectnode();
+				l.disconnectselectnode(generation);
 				dragjudge = true;
 			}
 			InvalidateRect(hWnd, NULL, TRUE);
@@ -530,7 +630,7 @@ public:
 			point p3, p4;
 			t.d2l(&p1, &p3);
 			t.d2l(&p2, &p4);
-			l.rectselect(&p3, &p4);
+			l.rectselect(&p3, &p4, generation);
 			InvalidateRect(hWnd, NULL, TRUE);
 			UpdateWindow(hWnd);
 			{
@@ -552,20 +652,11 @@ public:
 
 	void OnMouseWheel(int delta) {
 		if (delta < 0) {
-			t.z *= 1.0 / 1.20;
-			if (t.z < 0.5) {
-				t.z = 0.5;
-				return;
-			}
+			OnShrink();
 		}
 		else {
-			t.z *= 1.20;
-			if (t.z > 10) {
-				t.z = 10;
-				return;
-			}
+			OnZoom();
 		}
-		resetFont();
 	}
 
 	void OnDestroy() {
@@ -575,8 +666,8 @@ public:
 
 	void OnPaint(HDC hdc) {
 		HFONT hOldFont = (HFONT)SelectObject(hdc, hObjectFont);
-		l.paint(hdc, &t, mode == dragnode ? &dragoffset : nullptr);
-		if (nn) nn->paint(hdc, &t);
+		l.paint(hdc, &t, generation, mode == dragnode ? &dragoffset : nullptr);
+		if (nn) nn->paint(hdc, &t, generation);
 		SelectObject(hdc, hOldFont);
 	}
 
@@ -612,9 +703,13 @@ public:
 	
 	void OnDropped() {
 		if (nn) {
-			l.unselect();
+			beginedit();
+			l.unselect(generation);
+
+			nn->born = generation;
+
 			l.add(nn);
-			l.insert(nn);
+			l.insert(nn, generation);
 			nn = nullptr;
 			InvalidateRect(hWnd, NULL, TRUE);
 		}
@@ -622,24 +717,25 @@ public:
 
 	void OnHome() {
 		point p1, p2;
-		l.allnodemargin(&p1, &p2);
+		l.allnodemargin(&p1, &p2, generation);
 		t.settransfromrect(&p1, &p2, POINT2PIXEL(10));
 		resetFont();
 	}
 
 	void OnDelete() {
-		l.disconnectselectnode();
-		l.del();
+		beginedit();
+		l.disconnectselectnode(generation);
+		l.del(generation);
 		InvalidateRect(hWnd, NULL, TRUE);
 	}
 
 	void OnUnselect() {
-		l.unselect();
+		l.unselect(generation);
 		InvalidateRect(hWnd, NULL, TRUE);
 	}
 
 	void OnAllselect() {
-		l.allselect();
+		l.allselect(generation);
 		InvalidateRect(hWnd, NULL, TRUE);
 	}
 
@@ -648,6 +744,9 @@ public:
 			if (MessageBox(hWnd, L"新規作成しますか？", L"確認", MB_YESNO) == IDNO)
 				return;
 		}
+		// 初期化
+		generation = 0;
+		maxgeneration = 0;
 		l.clear();
 		t.l = { 0.0, 0.0 };
 		t.z = 1.0;
@@ -670,6 +769,21 @@ public:
 			return;
 		}
 		resetFont();
+	}
+
+	void OnUndo() {
+		if (generation > 0) {
+			--generation;
+		}
+		InvalidateRect(hWnd, NULL, TRUE);
+	}
+
+	void OnRedo() {
+		if (generation < maxgeneration)
+		{
+			++generation;
+		}
+		InvalidateRect(hWnd, NULL, TRUE);
 	}
 };
 
@@ -711,10 +825,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case DL_BEGINDRAG:
 			nDragItem = LBItemFromPt(lpdli->hWnd, lpdli->ptCursor, TRUE);
 			if (nDragItem != -1) {
-				node* nn = new node();
+				node* nn = new node(0);
 				nn->s.w = 100;
 				nn->s.h = 50;
-				nn->select = true;
+				nn->setselect(true, 0);
 				SendMessage(lpdli->hWnd, LB_GETTEXT, nDragItem, (LPARAM)nn->name);
 				if (pNoCodeApp) {
 					pNoCodeApp->OnBeginDrag(nn);
@@ -757,6 +871,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード4"));
 		pNoCodeApp = new NoCodeApp(hWnd);
 		SendMessage(hWnd, WM_DPICHANGED, 0, 0);
+		break;
+	case WM_RBUTTONDOWN:
+		if (pNoCodeApp) {
+			pNoCodeApp->OnRButtonDown(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		}
+		break;
+	case WM_RBUTTONUP:
+		if (pNoCodeApp) {
+			pNoCodeApp->OnRButtonUp(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		}
 		break;
 	case WM_LBUTTONDOWN:
 		if (pNoCodeApp) {
@@ -845,6 +969,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				pNoCodeApp->OnShrink();
 			}
 			break;
+		case ID_UNDO:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnUndo();
+			}
+			break;
+		case ID_REDO:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnRedo();
+			}
+			break;
 		}
 		break;
 	case WM_CLOSE:
@@ -904,7 +1038,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		LoadIcon(hInstance,(LPCTSTR)IDI_ICON1),
 		LoadCursor(0,IDC_ARROW),
 		(HBRUSH)(COLOR_WINDOW + 1),
-		MAKEINTRESOURCE(IDR_MENU1),
+		MAKEINTRESOURCE(IDR_MAIN),
 		szClassName
 	};
 	RegisterClass(&wndclass);
@@ -933,6 +1067,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		{FVIRTKEY | FCONTROL, VK_OEM_MINUS, ID_SHRINK},
 		{FVIRTKEY | FCONTROL, VK_ADD, ID_ZOOM},
 		{FVIRTKEY | FCONTROL, VK_SUBTRACT, ID_SHRINK},
+		{FVIRTKEY | FCONTROL, 'Z', ID_UNDO},
+		{FVIRTKEY | FCONTROL, 'Y', ID_REDO},
 	};
 	HACCEL hAccel = CreateAcceleratorTable(Accel, _countof(Accel));
 	while (GetMessage(&msg, 0, 0, 0))

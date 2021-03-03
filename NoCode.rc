@@ -99,7 +99,7 @@ IDI_ICON1               ICON                    "NoCode.ico"
 // Menu
 //
 
-IDR_MENU1 MENU
+IDR_MAIN MENU
 BEGIN
     POPUP "ファイル(&F)"
     BEGIN
@@ -152,6 +152,28 @@ BEGIN
         MENUITEM "更新プログラムの確認(&U)",              ID_UPDATE
         MENUITEM SEPARATOR
         MENUITEM "バージョン情報(&A)",                 ID_ABOUT
+    END
+END
+
+IDR_NODEPOPUP MENU
+BEGIN
+    POPUP "POPUP"
+    BEGIN
+        MENUITEM "コピー(&C)\tCtrl+C",             0
+        MENUITEM "切り取り(&X)\tCtrl+X",            0
+        MENUITEM "削除(&D)\tDel",                 ID_DELETE
+        MENUITEM SEPARATOR
+        MENUITEM "お気に入りに登録(&F)\tCtrl+F",        0
+        MENUITEM SEPARATOR
+        MENUITEM "プロパティ(&P)\tAlt+Enter",        0
+    END
+END
+
+IDR_CLIENTPOPUP MENU
+BEGIN
+    POPUP "POPUP"
+    BEGIN
+        MENUITEM "クライアント",                      ID_POPUP_40064
     END
 END
 
