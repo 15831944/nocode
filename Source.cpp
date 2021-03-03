@@ -5,22 +5,19 @@
 #include <windowsx.h>
 #include <commctrl.h>
 #include <list>
+#include "util.h"
 #include "resource.h"
 
 #define DEFAULT_DPI 96
 #define SCALEX(X) MulDiv(X, uDpiX, DEFAULT_DPI)
 #define SCALEY(Y) MulDiv(Y, uDpiY, DEFAULT_DPI)
 #define POINT2PIXEL(PT) MulDiv(PT, uDpiY, 72)
-
-#define ID_ALLSELECT 1000
-#define ID_ALLUNSELECT 1001
-#define ID_DELETE 1002
-#define ID_HOMEPOSITION 1003
 #define DRAGJUDGEWIDTH POINT2PIXEL(4)
 #define FONT_NAME L"Yu Gothic UI"
 #define FONT_SIZE 12
 
 WCHAR szClassName[] = L"NoCode Editor";
+HHOOK g_hHook;
 
 BOOL GetScaling(HWND hWnd, UINT* pnX, UINT* pnY)
 {
@@ -104,6 +101,16 @@ public:
 	}
 };
 
+enum NODE_KIND {
+	NODE_NORMAL,
+	NODE_START,
+	NODE_END,
+	NODE_IF,
+	NODE_LOOP,
+	NODE_GOTO,
+
+};
+
 class node {
 public:
 	WCHAR name[16];
@@ -114,9 +121,9 @@ public:
 	node* prev;
 	bool select;
 	bool del;
-	node() : k(0), next(0), prev(0), p{ 0.0, 0.0 }, s{ 0.0, 0.0 }, name{}, select(false), del(false) {}
+	node() : k(0), next{}, prev{}, p{ 0.0, 0.0 }, s{ 0.0, 0.0 }, name{}, select(false), del(false) {}
 	~node() {}
-	void paint(HDC hdc, const trans* t, const point* offset = nullptr) const {
+	virtual void paint(HDC hdc, const trans* t, const point* offset = nullptr) const {
 		if (del) return;
 		const point p1 = { p.x - s.w / 2 + (offset ? offset->x : 0.0), p.y - s.h / 2 + (offset ? offset->y : 0.0) };
 		const point p2 = { p.x + s.w / 2 + (offset ? offset->x : 0.0), p.y + s.h / 2 + (offset ? offset->y : 0.0) };
@@ -132,17 +139,18 @@ public:
 		COLORREF oldColor = SetTextColor(hdc, select ? RGB(255, 0, 0) : RGB(0, 0, 0));
 		DrawText(hdc, name, -1, &rect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
 		SetTextColor(hdc, oldColor);
+
 		if (next) {
 			const point p1 = { p.x + (offset ? offset->x : 0.0), p.y + s.h / 2 + (offset ? offset->y : 0.0) };
 			const point p2 = { next->p.x + (offset ? offset->x : 0.0), next->p.y - next->s.h / 2 + (offset ? offset->y : 0.0) };
 			point p3, p4;
 			t->l2d(&p1, &p3);
 			t->l2d(&p2, &p4);
-			MoveToEx(hdc, (int)p3.x, (int)p3.y, 0);
-			LineTo(hdc, (int)p4.x, (int)p4.y);
+			POINT p5 = { (int)p3.x, (int)p3.y }, p6 = { (int)p4.x, (int)p4.y };
+			util::DrawArrow(hdc, &p5, &p6, &t->z);
 		}
 	}
-	bool hit(const point* p) const {
+	virtual bool hit(const point* p) const {
 		return
 			!del &&
 			p->x >= this->p.x - s.w / 2 &&
@@ -150,7 +158,7 @@ public:
 			p->y >= this->p.y - s.h / 2 &&
 			p->y <= this->p.y + s.h / 2;
 	}
-	bool inrect(const point* p1, const point* p2) const {
+	virtual bool inrect(const point* p1, const point* p2) const {
 		return
 			!del &&
 			p.x - s.w / 2 >= p1->x &&
@@ -400,129 +408,72 @@ enum Mode {
 	rectselect = 3,
 };
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-	static HFONT hObjectFont, hUIFont;
-	static UINT uDpiX = DEFAULT_DPI, uDpiY = DEFAULT_DPI;
-	static trans t;
-	static nodelist l;
-	static int mode;
-	static POINT dragstartP;
-	static point dragstartL;
-	static point dragoffset;
-	static bool dragjudge;
-	static bool modify;
-	static UINT dragMsg;
-	static HWND hList;
-	static node* nn; // 新規作成ノード
-	static node* dd; // ドラッグ中ノード
-	if (msg == dragMsg) {
-		static int nDragItem;
-		LPDRAGLISTINFO lpdli = (LPDRAGLISTINFO)lParam;
-		switch (lpdli->uNotification) {
-		case DL_BEGINDRAG:
-			nDragItem = LBItemFromPt(lpdli->hWnd, lpdli->ptCursor, TRUE);
-			if (nDragItem != -1) {
-				nn = new node();
-				nn->s.w = 100;
-				nn->s.h = 50;
-				nn->select = true;
-				SendMessage(lpdli->hWnd, LB_GETTEXT, nDragItem, (LPARAM)nn->name);
-			}
-			return TRUE;
-		case DL_DRAGGING:
-			if (nn) {
-				POINT p0 = { lpdli->ptCursor.x, lpdli->ptCursor.y };
-				ScreenToClient(hWnd, &p0);
-				point p1{ (double)p0.x, (double)p0.y };
-				point p2;
-				t.d2l(&p1, &p2);
-				nn->p.x = p2.x;
-				nn->p.y = p2.y;
-				InvalidateRect(hWnd, NULL, TRUE);
-			}
-			return 0;
-		case DL_CANCELDRAG:
-			nDragItem = -1;
-			if (nn) {
-				delete nn;
-				nn = nullptr;
-			}
+class NoCodeApp {
+public:
+	HFONT hObjectFont;
+	trans t;
+	nodelist l;
+	Mode mode;
+	POINT dragstartP;
+	point dragstartL;
+	point dragoffset;
+	bool dragjudge;
+	bool modify;
+	node* dd; // ドラッグ中ノード
+	HWND hWnd;
+	UINT uDpiX, uDpiY;
+	node* nn; // 新規作成ノード
+
+	NoCodeApp(HWND hMainWnd)
+		:hObjectFont(0)
+		, t{}
+		, l{}
+		, mode(none)
+		, dragstartP{}
+		, dragstartL{}
+		, dragoffset{}
+		, dragjudge(false)
+		, modify(false)
+		, dd(nullptr)
+		, hWnd(hMainWnd)
+		, uDpiX(DEFAULT_DPI)
+		, uDpiY(DEFAULT_DPI)
+		, nn(nullptr)
+	{}
+
+	void resetFont() {
+		if (hWnd) {
+			GetScaling(hWnd, &uDpiX, &uDpiY);
+			DeleteObject(hObjectFont);
+			hObjectFont = CreateFontW(-POINT2PIXEL((int)(FONT_SIZE * t.z)), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
 			InvalidateRect(hWnd, NULL, TRUE);
-			break;
-		case DL_DROPPED:
-			if (nn) {
-				if (WindowFromPoint(lpdli->ptCursor) == hWnd) {
-					l.unselect();
-					l.add(nn);
-					l.insert(nn);
-				} else {
-					delete nn;
-				}
-			}
-			nn = nullptr;
-			nDragItem = -1;
-			InvalidateRect(hWnd, NULL, TRUE);
-			break;
 		}
-		return 0;
 	}
-	switch (msg)
-	{
-	case WM_CREATE:
-		dragMsg = RegisterWindowMessage(DRAGLISTMSGSTRING);
-		hList = CreateWindow(L"LISTBOX", 0, WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOINTEGRALHEIGHT, 0, 0, 0, 0, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
-		MakeDragList(hList);
-		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード1"));
-		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード2"));
-		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード3"));
-		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード4"));
-		mode = 0;
-		{
-			// test add node
-			node* n1 = new node();
-			n1->p.x = 0;
-			n1->p.y = 0;
-			n1->s.w = 100;
-			n1->s.h = 50;
-			lstrcpyW(n1->name, L"ノード1");
-			l.add(n1);
-			node* n2 = new node();
-			n2->p.x = 0;
-			n2->p.y = 100;
-			n2->s.w = 100;
-			n2->s.h = 50;
-			lstrcpyW(n2->name, L"ノード2");
-			l.add(n2);
-		}
-		SendMessage(hWnd, WM_DPICHANGED, 0, 0);
-		break;
-	case WM_LBUTTONDOWN:
-		{
-			point p1{ (double)GET_X_LPARAM(lParam), (double)GET_Y_LPARAM(lParam) };
-			point p2;
-			t.d2l(&p1, &p2);
-			dd = l.hit(&p2);
-			if (dd) {
-				if (!l.isselect(dd)) {
-					l.select(dd); // 選択されていないときは1つ選択する
-				}
-				InvalidateRect(hWnd, NULL, TRUE);
-				dragstartP = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-				dragstartL = p2;
-				mode = dragnode;
-				SetCapture(hWnd);
-			} else {
-				//矩形選択モード
-				l.unselect();
-				InvalidateRect(hWnd, NULL, TRUE);
-				dragstartP = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-				mode = rectselect;
-				SetCapture(hWnd);
+
+	void OnLButtonDown(int x, int y) {
+		point p1{ (double)x, (double)y };
+		point p2;
+		t.d2l(&p1, &p2);
+		dd = l.hit(&p2);
+		if (dd) {
+			if (!l.isselect(dd)) {
+				l.select(dd); // 選択されていないときは1つ選択する
 			}
+			dragstartP = { x, y };
+			dragstartL = p2;
+			mode = dragnode;
 		}
-		break;
-	case WM_LBUTTONUP:
+		else {
+			//矩形選択モード
+			l.unselect();
+			dragstartP = { x, y };
+			mode = rectselect;
+		}
+		InvalidateRect(hWnd, NULL, TRUE);
+		SetCapture(hWnd);
+	}
+
+	void OnLButtonUp(int x, int y) {
 		if (mode == dragnode) {
 			if (dragjudge) {
 				l.selectoffsetmerge(&dragoffset);
@@ -538,28 +489,29 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		mode = none;
 		ReleaseCapture();
 		InvalidateRect(hWnd, NULL, TRUE);
-		break;
-	case WM_MBUTTONDOWN:
-		{
-			dragstartP = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-			dragstartL = t.l;
-			mode = dragclient;
-			SetCapture(hWnd);
-		}
-		break;
-	case WM_MBUTTONUP:
+	}
+
+	void OnMButtonDown(int x, int y) {
+		dragstartP = { x, y };
+		dragstartL = t.l;
+		mode = dragclient;
+		SetCapture(hWnd);
+	}
+
+	void OnMButtonUp(int x, int y) {
 		mode = none;
 		ReleaseCapture();
-		break;
-	case WM_MOUSEMOVE:
+	}
+
+	void OnMouseMove(int x, int y) {
 		if (mode == dragclient) {
-			point p1{ (double)GET_X_LPARAM(lParam), (double)GET_Y_LPARAM(lParam) };
+			point p1{ (double)x, (double)y };
 			t.l.x = dragstartL.x - (p1.x - dragstartP.x) / t.z;
 			t.l.y = dragstartL.y - (p1.y - dragstartP.y) / t.z;
 			InvalidateRect(hWnd, NULL, TRUE);
 		}
 		else if (mode == dragnode) {
-			point p1{ (double)GET_X_LPARAM(lParam), (double)GET_Y_LPARAM(lParam) };
+			point p1{ (double)x, (double)y };
 			point p2;
 			t.d2l(&p1, &p2);
 			dragoffset.x = p2.x - dragstartL.x;
@@ -573,8 +525,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			InvalidateRect(hWnd, NULL, TRUE);
 		}
 		else if (mode == rectselect) {
-			point p1{ (double)min(dragstartP.x,GET_X_LPARAM(lParam)), (double)min(dragstartP.y,GET_Y_LPARAM(lParam)) };
-			point p2{ (double)max(dragstartP.x,GET_X_LPARAM(lParam)), (double)max(dragstartP.y,GET_Y_LPARAM(lParam)) };
+			point p1{ (double)min(dragstartP.x,x), (double)min(dragstartP.y,y) };
+			point p2{ (double)max(dragstartP.x,x), (double)max(dragstartP.y,y) };
 			point p3, p4;
 			t.d2l(&p1, &p3);
 			t.d2l(&p2, &p4);
@@ -593,73 +545,312 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				ReleaseDC(hWnd, hdc);
 			}
 		}
+	}
+	void OnDpiChanged() {
+		resetFont();
+	}
+
+	void OnMouseWheel(int delta) {
+		if (delta < 0) {
+			t.z *= 1.0 / 1.20;
+			if (t.z < 0.5) {
+				t.z = 0.5;
+				return;
+			}
+		}
+		else {
+			t.z *= 1.20;
+			if (t.z > 10) {
+				t.z = 10;
+				return;
+			}
+		}
+		resetFont();
+	}
+
+	void OnDestroy() {
+		l.clear();
+		DeleteObject(hObjectFont);
+	}
+
+	void OnPaint(HDC hdc) {
+		HFONT hOldFont = (HFONT)SelectObject(hdc, hObjectFont);
+		l.paint(hdc, &t, mode == dragnode ? &dragoffset : nullptr);
+		if (nn) nn->paint(hdc, &t);
+		SelectObject(hdc, hOldFont);
+	}
+
+	void OnSize(int x, int y, int w, int h) {
+		t.p.x = x;
+		t.p.y = y;
+		t.c.w = w;
+		t.c.h = h;
+	}
+
+	void OnBeginDrag(node* n) {
+		nn = n;
+	}
+
+	void OnDragging(int x, int y) {
+		if (nn) {
+			point p1{ (double)x, (double)y };
+			point p2;
+			t.d2l(&p1, &p2);
+			nn->p.x = p2.x;
+			nn->p.y = p2.y;
+			InvalidateRect(hWnd, NULL, TRUE);
+		}
+	}
+
+	void OnCancelDrag() {
+		if (nn) {
+			delete nn;
+			nn = nullptr;
+			InvalidateRect(hWnd, NULL, TRUE);
+		}
+	}
+	
+	void OnDropped() {
+		if (nn) {
+			l.unselect();
+			l.add(nn);
+			l.insert(nn);
+			nn = nullptr;
+			InvalidateRect(hWnd, NULL, TRUE);
+		}
+	}
+
+	void OnHome() {
+		point p1, p2;
+		l.allnodemargin(&p1, &p2);
+		t.settransfromrect(&p1, &p2, POINT2PIXEL(10));
+		resetFont();
+	}
+
+	void OnDelete() {
+		l.disconnectselectnode();
+		l.del();
+		InvalidateRect(hWnd, NULL, TRUE);
+	}
+
+	void OnUnselect() {
+		l.unselect();
+		InvalidateRect(hWnd, NULL, TRUE);
+	}
+
+	void OnAllselect() {
+		l.allselect();
+		InvalidateRect(hWnd, NULL, TRUE);
+	}
+
+	void OnNew() {
+		if (modify) {
+			if (MessageBox(hWnd, L"新規作成しますか？", L"確認", MB_YESNO) == IDNO)
+				return;
+		}
+		l.clear();
+		t.l = { 0.0, 0.0 };
+		t.z = 1.0;
+		resetFont();
+	}
+
+	void OnZoom() {
+		t.z *= 1.20;
+		if (t.z > 10) {
+			t.z = 10;
+			return;
+		}
+		resetFont();
+	}
+
+	void OnShrink() {
+		t.z *= 1.0 / 1.20;
+		if (t.z < 0.5) {
+			t.z = 0.5;
+			return;
+		}
+		resetFont();
+	}
+};
+
+LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+	switch (nCode) {
+	case HCBT_ACTIVATE:
+	{
+		UnhookWindowsHookEx(g_hHook);
+		HWND hMes = (HWND)wParam;
+		HWND hWnd = GetParent(hMes);
+		RECT rectMessageBox, rectParentWindow;
+		GetWindowRect(hMes, &rectMessageBox);
+		GetWindowRect(hWnd, &rectParentWindow);
+		RECT rect = {
+			(rectParentWindow.right + rectParentWindow.left - rectMessageBox.right + rectMessageBox.left) / 2,
+			(rectParentWindow.bottom + rectParentWindow.top - rectMessageBox.bottom + rectMessageBox.top) / 2,
+			(rectParentWindow.right + rectParentWindow.left - rectMessageBox.right + rectMessageBox.left) / 2 + rectMessageBox.right - rectMessageBox.left,
+			(rectParentWindow.bottom + rectParentWindow.top - rectMessageBox.bottom + rectMessageBox.top) / 2 + rectMessageBox.bottom - rectMessageBox.top
+		};
+		util::ClipOrCenterRectToMonitor(&rect, MONITOR_CLIP | MONITOR_WORKAREA);
+		SetWindowPos(hMes, hWnd, rect.left, rect.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+	}
+	}
+	return 0;
+}
+
+LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	static UINT uDpiX = DEFAULT_DPI, uDpiY = DEFAULT_DPI;
+	static UINT dragMsg;
+	static HWND hList;
+	static HFONT hUIFont;
+	static NoCodeApp* pNoCodeApp;
+	if (msg == dragMsg) {
+		static int nDragItem;
+		LPDRAGLISTINFO lpdli = (LPDRAGLISTINFO)lParam;
+		switch (lpdli->uNotification) {
+		case DL_BEGINDRAG:
+			nDragItem = LBItemFromPt(lpdli->hWnd, lpdli->ptCursor, TRUE);
+			if (nDragItem != -1) {
+				node* nn = new node();
+				nn->s.w = 100;
+				nn->s.h = 50;
+				nn->select = true;
+				SendMessage(lpdli->hWnd, LB_GETTEXT, nDragItem, (LPARAM)nn->name);
+				if (pNoCodeApp) {
+					pNoCodeApp->OnBeginDrag(nn);
+				}
+			}
+			return TRUE;
+		case DL_DRAGGING:
+			if (pNoCodeApp) {
+				POINT p = { lpdli->ptCursor.x, lpdli->ptCursor.y };
+				ScreenToClient(hWnd, &p);
+				pNoCodeApp->OnDragging(p.x, p.y);
+			}
+			return 0;
+		case DL_CANCELDRAG:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnCancelDrag();
+			}
+			break;
+		case DL_DROPPED:
+			if (pNoCodeApp) {
+				if (WindowFromPoint(lpdli->ptCursor) == hWnd) {
+					pNoCodeApp->OnDropped();
+				} else {
+					pNoCodeApp->OnCancelDrag();
+				}
+			}
+			break;
+		}
+		return 0;
+	}
+	switch (msg)
+	{
+	case WM_CREATE:
+		dragMsg = RegisterWindowMessage(DRAGLISTMSGSTRING);
+		hList = CreateWindow(L"LISTBOX", 0, WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOINTEGRALHEIGHT, 0, 0, 0, 0, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
+		MakeDragList(hList);
+		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード1"));
+		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード2"));
+		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード3"));
+		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード4"));
+		pNoCodeApp = new NoCodeApp(hWnd);
+		SendMessage(hWnd, WM_DPICHANGED, 0, 0);
+		break;
+	case WM_LBUTTONDOWN:
+		if (pNoCodeApp) {
+			pNoCodeApp->OnLButtonDown(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		}
+		break;
+	case WM_LBUTTONUP:
+		if (pNoCodeApp) {
+			pNoCodeApp->OnLButtonUp(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		}
+		break;
+	case WM_MBUTTONDOWN:
+		if (pNoCodeApp) {
+			pNoCodeApp->OnMButtonDown(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		}
+		break;
+	case WM_MBUTTONUP:
+		if (pNoCodeApp) {
+			pNoCodeApp->OnMButtonUp(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		}
+		break;
+	case WM_MOUSEMOVE:
+		if (pNoCodeApp) {
+			pNoCodeApp->OnMouseMove(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		}
 		break;
 	case WM_MOUSEWHEEL:
-		{
-			const int delta = GET_WHEEL_DELTA_WPARAM(wParam);
-			if (delta < 0) {
-				t.z *= 1.0 / 1.20;
-				if (t.z < 0.5) {
-					t.z = 0.5;
-					return 0;
-				}
-			}
-			else {
-				t.z *= 1.20;
-				if (t.z > 10) {
-					t.z = 10;
-					return 0;
-				}
-			}
-			DeleteObject(hObjectFont);
-			hObjectFont = CreateFontW(-POINT2PIXEL((int)(FONT_SIZE * t.z)), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
-			InvalidateRect(hWnd, NULL, TRUE);
+		if (pNoCodeApp) {
+			pNoCodeApp->OnMouseWheel(GET_WHEEL_DELTA_WPARAM(wParam));
 		}
 		break;
 	case WM_PAINT:
 		{
 			PAINTSTRUCT ps;
 			HDC hdc = BeginPaint(hWnd, &ps);
-			HFONT hOldFont = (HFONT)SelectObject(hdc, hObjectFont);
-			l.paint(hdc, &t, mode == dragnode ? &dragoffset : nullptr);
-			if (nn) nn->paint(hdc, &t);
-			SelectObject(hdc, hOldFont);
+			if (pNoCodeApp) {
+				pNoCodeApp->OnPaint(hdc);
+			}
 			EndPaint(hWnd, &ps);
 		}
 		break;
 	case WM_SIZE:
 		MoveWindow(hList, 0, 0, POINT2PIXEL(128), HIWORD(lParam), 1);
-		t.p.x = POINT2PIXEL(128);
-		t.p.y = 0;
-		t.c.w = LOWORD(lParam) - POINT2PIXEL(128);
-		t.c.h = HIWORD(lParam);
+		if (pNoCodeApp) {
+			pNoCodeApp->OnSize(POINT2PIXEL(128), 0, LOWORD(lParam) - POINT2PIXEL(128), HIWORD(lParam));
+		}
 		break;
 	case WM_COMMAND:
 		switch (LOWORD(wParam))
 		{
-		case ID_ALLSELECT:
-			l.allselect();
-			InvalidateRect(hWnd, NULL, TRUE);
+		case ID_NEW:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnNew();
+			}
 			break;
-		case ID_ALLUNSELECT:
-			l.unselect();
-			InvalidateRect(hWnd, NULL, TRUE);
+		case ID_ALLSELECT:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnAllselect();
+			}
+			break;
+		case ID_UNSELECT:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnUnselect();
+			}
 			break;
 		case ID_DELETE:
-			l.disconnectselectnode();
-			l.del();
-			InvalidateRect(hWnd, NULL, TRUE);
-			break;
-		case ID_HOMEPOSITION:
-			{
-				point p1, p2;
-				l.allnodemargin(&p1, &p2);
-				t.settransfromrect(&p1, &p2, POINT2PIXEL(10));
+			if (pNoCodeApp) {
+				pNoCodeApp->OnDelete();
 			}
-			DeleteObject(hObjectFont);
-			hObjectFont = CreateFontW(-POINT2PIXEL((int)(FONT_SIZE * t.z)), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
-			InvalidateRect(hWnd, NULL, TRUE);
 			break;
+		case ID_HOME:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnHome();
+			}
+			break;
+		case ID_EXIT:
+			PostMessage(hWnd, WM_CLOSE, 0, 0);
+			break;
+		case ID_ZOOM:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnZoom();
+			}
+			break;
+		case ID_SHRINK:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnShrink();
+			}
+			break;
+		}
+		break;
+	case WM_CLOSE:
+		g_hHook = SetWindowsHookEx(WH_CBT, CBTProc, NULL, ::GetCurrentThreadId());
+		if (MessageBox(hWnd, L"終了しますか？", L"確認", MB_YESNO) == IDYES) {
+			DestroyWindow(hWnd);
 		}
 		break;
 	case WM_NCCREATE:
@@ -678,16 +869,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		return DefWindowProc(hWnd, msg, wParam, lParam);
 	case WM_DPICHANGED:
 		GetScaling(hWnd, &uDpiX, &uDpiY);
-		DeleteObject(hObjectFont);
-		hObjectFont = CreateFontW(-POINT2PIXEL((int)(FONT_SIZE * t.z)), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
+		if (pNoCodeApp)
+		{
+			pNoCodeApp->OnDpiChanged();
+		}
 		DeleteObject(hUIFont);
 		hUIFont = CreateFontW(-POINT2PIXEL(FONT_SIZE), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
 		SendMessage(hList, WM_SETFONT, (WPARAM)hUIFont, 0);
 		break;
 	case WM_DESTROY:
-		l.clear();
-		DeleteObject(hObjectFont);
+		if (pNoCodeApp) {
+			pNoCodeApp->OnDestroy();
+		}
 		DeleteObject(hUIFont);
+		delete pNoCodeApp;
+		pNoCodeApp = nullptr;
 		PostQuitMessage(0);
 		break;
 	default:
@@ -708,7 +904,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		LoadIcon(hInstance,(LPCTSTR)IDI_ICON1),
 		LoadCursor(0,IDC_ARROW),
 		(HBRUSH)(COLOR_WINDOW + 1),
-		0,
+		MAKEINTRESOURCE(IDR_MENU1),
 		szClassName
 	};
 	RegisterClass(&wndclass);
@@ -728,10 +924,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 	ShowWindow(hWnd, SW_SHOWDEFAULT);
 	UpdateWindow(hWnd);
 	ACCEL Accel[] = {
-		{FVIRTKEY | FCONTROL, 0x41, ID_ALLSELECT},
-		{FVIRTKEY, VK_ESCAPE, ID_ALLUNSELECT},
+		{FVIRTKEY | FCONTROL, 'A', ID_ALLSELECT},
+		{FVIRTKEY, VK_ESCAPE, ID_UNSELECT},
 		{FVIRTKEY, VK_DELETE, ID_DELETE},
-		{FVIRTKEY, VK_HOME, ID_HOMEPOSITION},
+		{FVIRTKEY, VK_HOME, ID_HOME},
+		{FVIRTKEY | FCONTROL, 'W', ID_EXIT},
+		{FVIRTKEY | FCONTROL, VK_OEM_PLUS, ID_ZOOM},
+		{FVIRTKEY | FCONTROL, VK_OEM_MINUS, ID_SHRINK},
+		{FVIRTKEY | FCONTROL, VK_ADD, ID_ZOOM},
+		{FVIRTKEY | FCONTROL, VK_SUBTRACT, ID_SHRINK},
 	};
 	HACCEL hAccel = CreateAcceleratorTable(Accel, _countof(Accel));
 	while (GetMessage(&msg, 0, 0, 0))

@@ -93,6 +93,68 @@ END
 // remains consistent on all systems.
 IDI_ICON1               ICON                    "NoCode.ico"
 
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_MENU1 MENU
+BEGIN
+    POPUP "ファイル(&F)"
+    BEGIN
+        MENUITEM "新規作成(&N)\tCtrl+N",            ID_NEW
+        MENUITEM "開く(&O)...\tCtrl+O",           ID_OPEN
+        MENUITEM "保存(&S)\tCtrl+S",              ID_SAVE
+        MENUITEM "名前を付けて保存(&A)...\tCtrl+Shift+S", ID_SAVEAS
+        MENUITEM "印刷(&P)\tCtrl+P",              ID_PRINT
+        MENUITEM SEPARATOR
+        MENUITEM "終了(&X)\tCtrl+W",              ID_EXIT
+    END
+    POPUP "編集(&E)"
+    BEGIN
+        MENUITEM "元に戻す(&U)\tCtrl+Z",            ID_UNDO
+        MENUITEM "やり直し(&R)\tCtrl+Y",            ID_REDO
+        MENUITEM SEPARATOR
+        MENUITEM "切り取り(&T)\tCtrl+X",            ID_CUT
+        MENUITEM "貼り付け(&P)\tCtrl+V",            ID_PASTE
+        MENUITEM "コピー(&C)\tCtrl+C",             ID_COPY
+        MENUITEM "削除(&D)\tDel",                 ID_DELETE
+        MENUITEM SEPARATOR
+        MENUITEM "すべて選択(&A)\tCtrl+A",           ID_ALLSELECT
+        MENUITEM "選択解除(&N)\tEsc",               ID_UNSELECT
+    END
+    POPUP "表示(&V)"
+    BEGIN
+        MENUITEM "ノード",                         ID_NODE
+        MENUITEM "プロパティ",                       ID_PROPERTY
+        MENUITEM "出力",                          ID_OUTPUT
+        MENUITEM SEPARATOR
+        MENUITEM "拡大(&Z)\tCtrl++",              ID_ZOOM
+        MENUITEM "縮小(&S)\tCtrl+-",              ID_SHRINK
+        MENUITEM "画面内に収める(&H)\tHome",           ID_HOME
+        MENUITEM SEPARATOR
+    END
+    POPUP "実行(&R)"
+    BEGIN
+        MENUITEM "実行(&R)\tF5",                  ID_RUN
+        MENUITEM "選択ノードのみ実行(&S)\tShift+F5",     ID_RUNSELECTEDNODE
+        MENUITEM SEPARATOR
+        MENUITEM "ステップ実行(&S)\tF10",             ID_STEP
+        MENUITEM "ブレークポイント(&B)\tF9",            ID_BREAKPOINT
+    END
+    POPUP "ヘルプ(&H)"
+    BEGIN
+        MENUITEM "ヘルプの表示",                      ID_HELP
+        MENUITEM SEPARATOR
+        MENUITEM "フィードバックの送信(&F)",              ID_FEEDBACK
+        MENUITEM SEPARATOR
+        MENUITEM "更新プログラムの確認(&U)",              ID_UPDATE
+        MENUITEM SEPARATOR
+        MENUITEM "バージョン情報(&A)",                 ID_ABOUT
+    END
+END
+
 #endif    // 日本語 (日本) resources
 /////////////////////////////////////////////////////////////////////////////
 
