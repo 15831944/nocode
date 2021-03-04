@@ -7,6 +7,7 @@
 #define IDR_MAIN                        102
 #define IDR_NODEPOPUP                   103
 #define IDR_CLIENTPOPUP                 104
+#define IDR_TOOLBAR1                    104
 #define ID_40001                        40001
 #define ID_40002                        40002
 #define ID_40003                        40003
@@ -72,13 +73,16 @@
 #define ID_PRINT                        40063
 #define ID_POPUP_40064                  40064
 #define ID_POPUP_40065                  40065
+#define ID_SUSPEND                      40076
+#define ID_STOP                         40077
+#define ID_BUTTON40090                  40090
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        104
-#define _APS_NEXT_COMMAND_VALUE         40066
+#define _APS_NEXT_RESOURCE_VALUE        106
+#define _APS_NEXT_COMMAND_VALUE         40091
 #define _APS_NEXT_CONTROL_VALUE         1001
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

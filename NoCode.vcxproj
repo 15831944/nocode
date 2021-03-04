@@ -170,6 +170,7 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="NoCode.ico" />
+    <Image Include="toolbar1.bmp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

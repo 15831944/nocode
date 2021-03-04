@@ -39,5 +39,8 @@
     <Image Include="NoCode.ico">
       <Filter>リソース ファイル</Filter>
     </Image>
+    <Image Include="toolbar1.bmp">
+      <Filter>リソース ファイル</Filter>
+    </Image>
   </ItemGroup>
 </Project>

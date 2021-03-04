@@ -51,8 +51,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,4
- PRODUCTVERSION 1,0,0,4
+ FILEVERSION 1,0,0,5
+ PRODUCTVERSION 1,0,0,5
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -69,12 +69,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "hack.jp"
             VALUE "FileDescription", "NoCode Editor"
-            VALUE "FileVersion", "1.0.0.4"
+            VALUE "FileVersion", "1.0.0.5"
             VALUE "InternalName", "NoCode.exe"
             VALUE "LegalCopyright", "Copyright (C) 2021"
             VALUE "OriginalFilename", "NoCode.exe"
             VALUE "ProductName", "NoCode"
-            VALUE "ProductVersion", "1.0.0.4"
+            VALUE "ProductVersion", "1.0.0.5"
         END
     END
     BLOCK "VarFileInfo"
@@ -176,6 +176,44 @@ BEGIN
         MENUITEM "クライアント",                      ID_POPUP_40064
     END
 END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Toolbar
+//
+
+IDR_TOOLBAR1 TOOLBAR 64, 64
+BEGIN
+    BUTTON      ID_UNDO
+    BUTTON      ID_REDO
+    SEPARATOR
+    BUTTON      ID_RUN
+    BUTTON      ID_SUSPEND
+    BUTTON      ID_STOP
+    SEPARATOR
+    BUTTON      ID_COPY
+    BUTTON      ID_CUT
+    BUTTON      ID_PASTE
+    BUTTON      ID_DELETE
+    SEPARATOR
+    BUTTON      ID_SAVE
+    BUTTON      ID_OPEN
+    BUTTON      ID_EXIT
+    SEPARATOR
+    BUTTON      ID_ZOOM
+    BUTTON      ID_SHRINK
+    BUTTON      ID_HOME
+    BUTTON      ID_HELP
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDR_TOOLBAR1            BITMAP                  "toolbar1.bmp"
 
 #endif    // 日本語 (日本) resources
 /////////////////////////////////////////////////////////////////////////////

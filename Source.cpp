@@ -212,12 +212,17 @@ public:
 		l.clear();
 	}
 	void setbornanddead(UINT64 generation) {
-		for (auto i : l) {
-			if (i->born > generation) {
-				i->born = UINT64_MAX;
+		for (std::list<node*>::iterator it = l.begin(); it != l.end(); ) {
+			if ((*it)->born > generation) {
+				delete (*it); // 未来に産まれる人たちは削除
+				it = l.erase(it);
+				continue;
 			}
+			it++;
+		}
+		for (auto i : l) {
 			if (i->dead >= generation) {
-				i->dead = UINT64_MAX;
+				i->dead = UINT64_MAX; // 今生きている人たちには永遠の命を与える
 			}
 		}
 	}
@@ -816,6 +821,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	static UINT uDpiX = DEFAULT_DPI, uDpiY = DEFAULT_DPI;
 	static UINT dragMsg;
 	static HWND hList;
+	static HWND hTool;
 	static HFONT hUIFont;
 	static NoCodeApp* pNoCodeApp;
 	if (msg == dragMsg) {
@@ -869,6 +875,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード2"));
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード3"));
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード4"));
+
+		{
+			TBBUTTON tbb[] = {
+				{0,ID_UNDO,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{1,ID_REDO,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{2,ID_RUN,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{3,ID_SUSPEND,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{4,ID_STOP,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{5,ID_COPY,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{6,ID_CUT,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{7,ID_PASTE,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{8,ID_DELETE,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{9,ID_SAVE,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{10,ID_OPEN,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{11,ID_EXIT,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{12,ID_ZOOM,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{13,ID_SHRINK,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{14,ID_HOME,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{15,ID_HELP,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+			};
+			hTool = CreateToolbarEx(hWnd, WS_CHILD | WS_VISIBLE, 0, _countof(tbb), ((LPCREATESTRUCT)lParam)->hInstance, IDR_TOOLBAR1, tbb, _countof(tbb), 0, 0, 64, 64, sizeof(TBBUTTON));
+			LONG_PTR lStyle = GetWindowLongPtr(hTool, GWL_STYLE);
+			lStyle = (lStyle | TBSTYLE_FLAT) & ~TBSTYLE_TRANSPARENT;
+			SetWindowLongPtr(hTool, GWL_STYLE, lStyle);
+		}
+
 		pNoCodeApp = new NoCodeApp(hWnd);
 		SendMessage(hWnd, WM_DPICHANGED, 0, 0);
 		break;
@@ -923,9 +955,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 	case WM_SIZE:
-		MoveWindow(hList, 0, 0, POINT2PIXEL(128), HIWORD(lParam), 1);
-		if (pNoCodeApp) {
-			pNoCodeApp->OnSize(POINT2PIXEL(128), 0, LOWORD(lParam) - POINT2PIXEL(128), HIWORD(lParam));
+		{
+			SendMessage(hTool, TB_AUTOSIZE, 0, 0);
+			RECT rect;
+			GetWindowRect(hTool, &rect);
+			MoveWindow(hList, 0, rect.bottom - rect.top, POINT2PIXEL(128), HIWORD(lParam) - (rect.bottom - rect.top), 1);
+			if (pNoCodeApp) {
+				pNoCodeApp->OnSize(POINT2PIXEL(128), rect.bottom - rect.top, LOWORD(lParam) - POINT2PIXEL(128), HIWORD(lParam) - (rect.bottom - rect.top));
+			}
 		}
 		break;
 	case WM_COMMAND:
