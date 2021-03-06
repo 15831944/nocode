@@ -21,7 +21,12 @@
 #define POINT2PIXEL(PT) MulDiv(PT, uDpiY, 72)
 #define DRAGJUDGEWIDTH POINT2PIXEL(4)
 #define FONT_NAME L"Yu Gothic UI"
-#define FONT_SIZE 12
+#define FONT_SIZE 14
+#define NODE_WIDTH 200
+#define NODE_HEIGHT 100
+#define ZOOM_MAX 10.0
+#define ZOOM_MIN 0.5
+#define ZOOM_STEP 1.20
 
 WCHAR szClassName[] = L"NoCode Editor";
 HHOOK g_hHook;
@@ -34,6 +39,24 @@ template<class Interface> inline void SafeRelease(Interface** ppInterfaceToRelea
 		(*ppInterfaceToRelease) = NULL;
 	}
 }
+
+class common {
+public:
+	HFONT hUIFont;
+	HWND hTool;
+	common()
+	: hTool(0)
+	, hUIFont(0)
+	{
+		//CreateFont
+	}
+	~common() {
+
+	}
+
+};
+
+common g_c;
 
 class graphic {
 public:
@@ -190,13 +213,16 @@ public:
 };
 
 enum NODE_KIND {
+	NODE_NONE,
 	NODE_NORMAL,
 	NODE_START,
 	NODE_END,
 	NODE_IF,
 	NODE_LOOP,
 	NODE_GOTO,
+	NODE_CUSTOM,
 
+	NODE_MULTI
 };
 
 class node {
@@ -204,18 +230,18 @@ private:
 	bool select;
 public:
 	WCHAR name[16];
-	int k;
+	NODE_KIND kind;
 	point p;
 	size s;
 	node* next;
 	node* prev;
 	UINT64 born;
 	UINT64 dead;
-	node(UINT64 initborn) : k(0), next{}, prev{}, p{ 0.0, 0.0 }, s{ 0.0, 0.0 }, name{}, select(false), born(initborn), dead(UINT64_MAX) {}
+	node(UINT64 initborn) : kind(NODE_NORMAL), next{}, prev{}, p{ 0.0, 0.0 }, s{ 0.0, 0.0 }, name{}, select(false), born(initborn), dead(UINT64_MAX) {}
 	node(const node* src, UINT64 initborn) {
 		select = src->select;
 		lstrcpy(name, src->name);
-		k = src->k;
+		kind = src->kind;
 		p = src->p;
 		s = src->s;
 		next = src->next;
@@ -360,9 +386,23 @@ public:
 			i->setselect(false, generation);
 		}
 	}
-	void rectselect(const point* p1, const point* p2, UINT64 generation) {
-		for (auto i : l) {
-			i->setselect(i->inrect(p1, p2, generation), generation);
+	void rectselect(const point* p1, const point* p2, UINT64 generation, std::list<node*>* selectnode) {
+		if (selectnode->size() == 0) {
+			for (auto i : l) {
+				i->setselect(i->inrect(p1, p2, generation), generation);
+			}
+		}
+		else {
+			for (auto i : l) {
+				if (std::find(selectnode->begin(), selectnode->end(), i) != selectnode->end())
+				{
+					i->setselect(!i->inrect(p1, p2, generation), generation);
+				}
+				else
+				{
+					i->setselect(i->inrect(p1, p2, generation), generation);
+				}
+			}
 		}
 	}
 	void allselect(UINT64 generation) {
@@ -535,7 +575,7 @@ public:
 		node* next = n->next;
 		while (next) {
 			next->p.x = prev->p.x;
-			next->p.y = prev->p.y + 100;
+			next->p.y = prev->p.y + NODE_HEIGHT*2;
 			prev = next;
 			next = next->next;
 		}
@@ -552,7 +592,6 @@ enum Mode {
 
 class NoCodeApp {
 public:
-	HFONT hObjectFont;
 	trans t;
 	nodelist l;
 	Mode mode;
@@ -568,6 +607,23 @@ public:
 	UINT64 generation;
 	UINT64 maxgeneration;
 	graphic* g;
+	std::list<node*> selectnode;
+
+	void RefreshToolBar() {
+
+		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_UNDO, CanUndo());
+		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_REDO, CanRedo());
+		bool selected = l.selectcount(generation) > 0;
+		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_COPY, selected);
+		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_CUT, selected);
+		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_PASTE, selected);
+		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_DELETE, selected);
+
+		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_ZOOM, ZOOM_MAX > t.z);
+		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_SHRINK, ZOOM_MIN < t.z);
+
+
+	}
 
 	void beginedit() {
 		if (generation < maxgeneration)
@@ -580,11 +636,12 @@ public:
 			++maxgeneration;
 		}
 		generation = maxgeneration;
+
+		RefreshToolBar();
 	}
 
 	NoCodeApp()
-		:hObjectFont(0)
-		, t{}
+		: t{}
 		, l{}
 		, mode(none)
 		, dragstartP{}
@@ -600,16 +657,8 @@ public:
 		, generation(0)
 		, maxgeneration(0)
 		, g(nullptr)
+		, selectnode{}
 	{
-	}
-
-	void resetFont() {
-		if (hWnd) {
-			GetScaling(hWnd, &uDpiX, &uDpiY);
-			DeleteObject(hObjectFont);
-			hObjectFont = CreateFontW(-POINT2PIXEL((int)(FONT_SIZE * t.z)), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
-			InvalidateRect(hWnd, NULL, FALSE);
-		}
 	}
 
 	void OnCreate(HWND hWnd) {
@@ -623,16 +672,26 @@ public:
 		t.d2l(&p1, &p2);
 		dd = l.hit(&p2, generation);
 		if (dd) {
-			if (!l.isselect(dd, generation)) {
+			if (GetKeyState(VK_CONTROL) < 0) {
+				dd->setselect(!l.isselect(dd, generation), generation); // Ctrlを押されているときは選択を追加
+			}
+			else if (!dd->isselect(generation)/*!l.isselect(dd, generation)*/){
 				l.select(dd, generation); // 選択されていないときは1つ選択する
 			}
+			SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
 			dragstartP = { x, y };
 			dragstartL = p2;
 			mode = dragnode;
 		}
 		else {
 			//矩形選択モード
-			l.unselect(generation);
+			if (GetKeyState(VK_CONTROL) < 0) {
+				l.selectlistup(&selectnode, generation);
+			}
+			else {
+				l.unselect(generation);
+				SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
+			}
 			dragstartP = { x, y };
 			mode = rectselect;
 		}
@@ -646,10 +705,17 @@ public:
 				dragjudge = false;
 				beginedit();
 				l.selectoffsetmerge(&dragoffset, generation);
+				if (dd) l.insert(dd, generation);
 			}
-			if (dd) l.insert(dd, generation);
+			else if (dd && dd->isselect(generation))
+			{
+				l.select(dd, generation);
+			}
 			dd = nullptr;
 			dragoffset = { 0.0, 0.0 };
+		}
+		else if (mode == rectselect) {
+			selectnode.clear();
 		}
 		mode = none;
 		ReleaseCapture();
@@ -676,12 +742,14 @@ public:
 		if (dd) {
 			if (!l.isselect(dd, generation)) {
 				l.select(dd, generation); // 選択されていないときは1つ選択する
+				SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
 			}
 			dragstartP = { x, y };
 			dragstartL = p2;
 		}
 		else {
 			l.unselect(generation);
+			SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
 		}
 
 		mode = rdown;
@@ -725,6 +793,7 @@ public:
 				l.disconnectselectnode(generation);
 				dragjudge = true;
 			}
+			RefreshToolBar();
 			InvalidateRect(hWnd, NULL, FALSE);
 		}
 		else if (mode == rectselect) {
@@ -733,7 +802,9 @@ public:
 			point p3, p4;
 			t.d2l(&p1, &p3);
 			t.d2l(&p2, &p4);
-			l.rectselect(&p3, &p4, generation);
+			l.rectselect(&p3, &p4, generation, &selectnode);
+			SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
+			RefreshToolBar();
 			InvalidateRect(hWnd, NULL, FALSE);
 			UpdateWindow(hWnd);
 			{
@@ -749,9 +820,6 @@ public:
 			}
 		}
 	}
-	void OnDpiChanged() {
-		resetFont();
-	}
 
 	void OnMouseWheel(int delta) {
 		if (delta < 0) {
@@ -764,7 +832,6 @@ public:
 
 	void OnDestroy() {
 		l.clear();
-		DeleteObject(hObjectFont);
 		delete g;
 		g = nullptr;
 	}
@@ -774,14 +841,8 @@ public:
 			if (g->begindraw(hWnd)) {
 				g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 				g->m_pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
-				{
-					//g->m_pRenderTarget->DrawText(sc_helloWorld, ARRAYSIZE(sc_helloWorld) - 1, m_pTextFormat, D2D1::RectF(0, 0, renderTargetSize.width, renderTargetSize.height), m_pBlackBrush);
-
-					//HFONT hOldFont = (HFONT)SelectObject(hdc, hObjectFont);
-					l.paint(g, &t, generation, mode == dragnode ? &dragoffset : nullptr);
-					if (nn) nn->paint(g, &t, generation);
-					//SelectObject(hdc, hOldFont);
-				}
+				l.paint(g, &t, generation, mode == dragnode ? &dragoffset : nullptr);
+				if (nn) nn->paint(g, &t, generation);
 				g->enddraw();
 			}
 		}
@@ -829,12 +890,12 @@ public:
 		if (nn) {
 			beginedit();
 			l.unselect(generation);
-
 			nn->born = generation;
-
 			l.add(nn);
 			l.insert(nn, generation);
 			nn = nullptr;
+			SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
+			RefreshToolBar();
 			InvalidateRect(hWnd, NULL, FALSE);
 		}
 	}
@@ -843,23 +904,28 @@ public:
 		point p1, p2;
 		l.allnodemargin(&p1, &p2, generation);
 		t.settransfromrect(&p1, &p2, POINT2PIXEL(10));
-		resetFont();
+		RefreshToolBar();
+		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnDelete() {
 		beginedit();
 		l.disconnectselectnode(generation);
 		l.del(generation);
+		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnUnselect() {
 		l.unselect(generation);
+		SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
+		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnAllselect() {
 		l.allselect(generation);
+		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
@@ -874,31 +940,47 @@ public:
 		l.clear();
 		t.l = { 0.0, 0.0 };
 		t.z = 1.0;
-		resetFont();
+		RefreshToolBar();
+		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnZoom() {
-		t.z *= 1.20;
-		if (t.z > 10) {
-			t.z = 10;
-			return;
+		double oldz = t.z;
+		t.z *= ZOOM_STEP;
+		if (t.z > ZOOM_MAX) {
+			t.z = ZOOM_MAX;
 		}
-		resetFont();
+		if (oldz != t.z) {
+			InvalidateRect(hWnd, NULL, FALSE);
+		}
+		RefreshToolBar();
 	}
 
 	void OnShrink() {
-		t.z *= 1.0 / 1.20;
-		if (t.z < 0.5) {
-			t.z = 0.5;
-			return;
+		double oldz = t.z;
+		t.z *= 1.0 / ZOOM_STEP;
+		if (t.z < ZOOM_MIN) {
+			t.z = ZOOM_MIN;
 		}
-		resetFont();
+		if (oldz != t.z) {
+			InvalidateRect(hWnd, NULL, FALSE);
+		}
+		RefreshToolBar();
+	}
+
+	bool CanUndo() {
+		return generation > 0;
+	}
+
+	bool CanRedo() {
+		return generation < maxgeneration;
 	}
 
 	void OnUndo() {
 		if (generation > 0) {
 			--generation;
 		}
+		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
@@ -907,11 +989,30 @@ public:
 		{
 			++generation;
 		}
+		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnDisplayChange() {
 		InvalidateRect(hWnd, 0, 0);
+	}
+
+	NODE_KIND GetSelectKind() const {
+		NODE_KIND nKind = NODE_NONE;
+		std::list<node*> selectnode;
+		l.selectlistup(&selectnode, generation);
+		for (auto i : selectnode) {
+			if (nKind != i->kind) {
+				if (nKind == NODE_NONE) {
+					nKind = i->kind;
+				}
+				else {
+					nKind = NODE_MULTI;
+					break;
+				}
+			}
+		}
+		return nKind;
 	}
 };
 
@@ -939,12 +1040,28 @@ LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
 	return 0;
 }
 
+INT_PTR CALLBACK DialogProc(HWND hDlg, unsigned msg, WPARAM wParam, LPARAM lParam)
+{
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+		return TRUE;
+	}
+	return FALSE;
+}
+
+BOOL CALLBACK EnumChildProc(HWND hWnd, LPARAM lParam)
+{
+	DestroyWindow(hWnd);
+	return TRUE;
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	static UINT uDpiX = DEFAULT_DPI, uDpiY = DEFAULT_DPI;
 	static UINT dragMsg;
 	static HWND hList;
-	static HWND hTool;
+	static HWND hDlg;
 	static HFONT hUIFont;
 	static NoCodeApp* pNoCodeApp;
 	if (msg == dragMsg) {
@@ -955,8 +1072,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			nDragItem = LBItemFromPt(lpdli->hWnd, lpdli->ptCursor, TRUE);
 			if (nDragItem != -1) {
 				node* nn = new node(0);
-				nn->s.w = 100;
-				nn->s.h = 50;
+				nn->s.w = NODE_WIDTH;
+				nn->s.h = NODE_HEIGHT;
 				nn->setselect(true, 0);
 				SendMessage(lpdli->hWnd, LB_GETTEXT, nDragItem, (LPARAM)nn->name);
 				if (pNoCodeApp) {
@@ -1017,16 +1134,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				{14,ID_HOME,TBSTATE_ENABLED,TBSTYLE_BUTTON},
 				{15,ID_HELP,TBSTATE_ENABLED,TBSTYLE_BUTTON},
 			};
-			hTool = CreateToolbarEx(hWnd, WS_CHILD | WS_VISIBLE, 0, _countof(tbb), ((LPCREATESTRUCT)lParam)->hInstance, IDR_TOOLBAR1, tbb, _countof(tbb), 0, 0, 64, 64, sizeof(TBBUTTON));
-			LONG_PTR lStyle = GetWindowLongPtr(hTool, GWL_STYLE);
+			g_c.hTool = CreateToolbarEx(hWnd, WS_CHILD | WS_VISIBLE, 0, _countof(tbb), ((LPCREATESTRUCT)lParam)->hInstance, IDR_TOOLBAR1, tbb, _countof(tbb), 0, 0, 64, 64, sizeof(TBBUTTON));
+			LONG_PTR lStyle = GetWindowLongPtr(g_c.hTool, GWL_STYLE);
 			lStyle = (lStyle | TBSTYLE_FLAT) & ~TBSTYLE_TRANSPARENT;
-			SetWindowLongPtr(hTool, GWL_STYLE, lStyle);
+			SetWindowLongPtr(g_c.hTool, GWL_STYLE, lStyle);
 		}
+		hDlg = CreateDialog(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDD_DIALOG1), hWnd, DialogProc);
 		pNoCodeApp = new NoCodeApp();
 		if (pNoCodeApp) {
 			pNoCodeApp->OnCreate(hWnd);
 		}
-		SendMessage(hWnd, WM_DPICHANGED, 0, 0);
+		SendMessage(hWnd, WM_APP, 0, 0);
+		break;
+	case WM_APP:
+		GetScaling(hWnd, &uDpiX, &uDpiY);
+		DeleteObject(hUIFont);
+		hUIFont = CreateFontW(-POINT2PIXEL(FONT_SIZE), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
+		SendMessage(hList, WM_SETFONT, (WPARAM)hUIFont, 0);
 		break;
 	case WM_RBUTTONDOWN:
 		if (pNoCodeApp) {
@@ -1075,12 +1199,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 	case WM_SIZE:
 		{
-			SendMessage(hTool, TB_AUTOSIZE, 0, 0);
+			SendMessage(g_c.hTool, TB_AUTOSIZE, 0, 0);
 			RECT rect;
-			GetWindowRect(hTool, &rect);
+			GetWindowRect(g_c.hTool, &rect);
 			MoveWindow(hList, 0, rect.bottom - rect.top, POINT2PIXEL(128), HIWORD(lParam) - (rect.bottom - rect.top), 1);
+			MoveWindow(hDlg, LOWORD(lParam) - POINT2PIXEL(256), rect.bottom - rect.top, POINT2PIXEL(256), HIWORD(lParam) - (rect.bottom - rect.top), 1);
 			if (pNoCodeApp) {
-				pNoCodeApp->OnSize(POINT2PIXEL(128), rect.bottom - rect.top, LOWORD(lParam) - POINT2PIXEL(128), HIWORD(lParam) - (rect.bottom - rect.top));
+				pNoCodeApp->OnSize(POINT2PIXEL(128), rect.bottom - rect.top, LOWORD(lParam) - POINT2PIXEL(128) - POINT2PIXEL(256), HIWORD(lParam) - (rect.bottom - rect.top));
 			}
 		}
 		break;
@@ -1140,6 +1265,38 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				pNoCodeApp->OnRedo();
 			}
 			break;
+		case ID_PROPERTY:
+			if (pNoCodeApp) {
+				WCHAR szTitle[32] = {};
+				GetWindowText(hDlg, szTitle, _countof(szTitle));
+				switch (pNoCodeApp->GetSelectKind()) {
+				case NODE_NONE:
+					if (lstrcmpi(szTitle, L"NODE_NONE") != 0)
+					{
+						SetWindowText(hDlg, L"NODE_NONE");
+						EnumChildWindows(hDlg, EnumChildProc, 0);
+						CreateDialog(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NONE), hDlg, DialogProc);
+					}
+					break;
+				case NODE_NORMAL:
+					if (lstrcmpi(szTitle, L"NODE_NORMAL") != 0)
+					{
+						SetWindowText(hDlg, L"NODE_NORMAL");
+						EnumChildWindows(hDlg, EnumChildProc, 0);
+						CreateDialog(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), hDlg, DialogProc);
+					}
+					break;
+				case NODE_MULTI:
+					if (lstrcmpi(szTitle, L"NODE_MULTI") != 0)
+					{
+						SetWindowText(hDlg, L"NODE_MULTI");
+						EnumChildWindows(hDlg, EnumChildProc, 0);
+						CreateDialog(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_MULTI), hDlg, DialogProc);
+					}
+					break;
+				}
+			}
+			break;
 		}
 		break;
 	case WM_CLOSE:
@@ -1163,14 +1320,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 		return DefWindowProc(hWnd, msg, wParam, lParam);
 	case WM_DPICHANGED:
-		GetScaling(hWnd, &uDpiX, &uDpiY);
-		if (pNoCodeApp)
-		{
-			pNoCodeApp->OnDpiChanged();
-		}
-		DeleteObject(hUIFont);
-		hUIFont = CreateFontW(-POINT2PIXEL(FONT_SIZE), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
-		SendMessage(hList, WM_SETFONT, (WPARAM)hUIFont, 0);
+		SendMessage(hWnd, WM_APP, 0, 0);
 		break;
 	case WM_DESTROY:
 		if (pNoCodeApp) {
@@ -1232,6 +1382,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		{FVIRTKEY | FCONTROL, VK_SUBTRACT, ID_SHRINK},
 		{FVIRTKEY | FCONTROL, 'Z', ID_UNDO},
 		{FVIRTKEY | FCONTROL, 'Y', ID_REDO},
+		{FVIRTKEY | FALT, VK_RETURN, ID_PROPERTY},		
 	};
 	HACCEL hAccel = CreateAcceleratorTable(Accel, _countof(Accel));
 	while (GetMessage(&msg, 0, 0, 0))

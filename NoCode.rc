@@ -51,8 +51,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,6
- PRODUCTVERSION 1,0,0,6
+ FILEVERSION 1,0,0,7
+ PRODUCTVERSION 1,0,0,7
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -69,12 +69,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "hack.jp"
             VALUE "FileDescription", "NoCode Editor"
-            VALUE "FileVersion", "1.0.0.6"
+            VALUE "FileVersion", "1.0.0.7"
             VALUE "InternalName", "NoCode.exe"
             VALUE "LegalCopyright", "Copyright (C) 2021"
             VALUE "OriginalFilename", "NoCode.exe"
             VALUE "ProductName", "NoCode"
-            VALUE "ProductVersion", "1.0.0.6"
+            VALUE "ProductVersion", "1.0.0.7"
         END
     END
     BLOCK "VarFileInfo"
@@ -180,6 +180,39 @@ END
 
 /////////////////////////////////////////////////////////////////////////////
 //
+// Dialog
+//
+
+IDD_DIALOG1 DIALOGEX 0, 0, 310, 176
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_VISIBLE
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+END
+
+IDD_PROPERTY_NORMAL DIALOGEX 0, 0, 310, 176
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_VISIBLE
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "のーまる",IDC_STATIC,7,7,23,8
+END
+
+IDD_PROPERTY_MULTI DIALOGEX 0, 0, 310, 176
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_VISIBLE
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "マルチ",IDC_STATIC,7,7,18,8
+END
+
+IDD_PROPERTY_NONE DIALOGEX 0, 0, 310, 176
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_VISIBLE
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    LTEXT           "NONE",IDC_STATIC,7,7,20,8
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
 // Toolbar
 //
 
@@ -214,6 +247,75 @@ END
 //
 
 IDR_TOOLBAR1            BITMAP                  "toolbar1.bmp"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_DIALOG1, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 303
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 169
+    END
+
+    IDD_PROPERTY_NORMAL, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 303
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 169
+    END
+
+    IDD_PROPERTY_MULTI, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 303
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 169
+    END
+
+    IDD_PROPERTY_NONE, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 303
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 169
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AFX_DIALOG_LAYOUT
+//
+
+IDD_DIALOG1 AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+IDD_PROPERTY_NORMAL AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+IDD_PROPERTY_MULTI AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+IDD_PROPERTY_NONE AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
 
 #endif    // 日本語 (日本) resources
 /////////////////////////////////////////////////////////////////////////////
