@@ -1,11 +1,18 @@
 ﻿#pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+
 #pragma comment(lib, "comctl32")
+#pragma comment(lib, "d2d1")
+#pragma comment(lib, "dwrite")
 
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
 #include <list>
 #include "util.h"
+#include <d2d1_3.h>
+#include <dwrite.h>
+#include <wincodec.h>
+
 #include "resource.h"
 
 #define DEFAULT_DPI 96
@@ -18,6 +25,87 @@
 
 WCHAR szClassName[] = L"NoCode Editor";
 HHOOK g_hHook;
+
+template<class Interface> inline void SafeRelease(Interface** ppInterfaceToRelease)
+{
+	if (*ppInterfaceToRelease != NULL)
+	{
+		(*ppInterfaceToRelease)->Release();
+		(*ppInterfaceToRelease) = NULL;
+	}
+}
+
+class graphic {
+public:
+	ID2D1Factory* m_pD2DFactory;
+	IWICImagingFactory* m_pWICFactory;
+	IDWriteFactory* m_pDWriteFactory;
+	ID2D1HwndRenderTarget* m_pRenderTarget;
+	IDWriteTextFormat* m_pTextFormat;
+	ID2D1SolidColorBrush* m_pNormalBrush;
+	ID2D1SolidColorBrush* m_pSelectBrush;
+	graphic(HWND hWnd)
+		: m_pD2DFactory(0)
+		, m_pWICFactory(0)
+		, m_pDWriteFactory(0)
+		, m_pRenderTarget(0)
+		, m_pTextFormat(0)
+		, m_pNormalBrush(0)
+		, m_pSelectBrush(0)
+	{
+		static const WCHAR msc_fontName[] = L"Verdana";
+		static const FLOAT msc_fontSize = 25;
+
+		HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &m_pD2DFactory);
+		if (SUCCEEDED(hr))
+			hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(m_pDWriteFactory), reinterpret_cast<IUnknown**>(&m_pDWriteFactory));
+		if (SUCCEEDED(hr))
+			hr = m_pDWriteFactory->CreateTextFormat(msc_fontName, 0, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, msc_fontSize, L"", &m_pTextFormat);
+		if (SUCCEEDED(hr))
+			hr = m_pTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+		if (SUCCEEDED(hr))
+			hr = m_pTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+		if (FAILED(hr)) {
+			MessageBox(hWnd, L"Direct2D の初期化に失敗しました。", 0, 0);
+		}
+	}
+	~graphic() {
+		SafeRelease(&m_pD2DFactory);
+		SafeRelease(&m_pDWriteFactory);
+		SafeRelease(&m_pRenderTarget);
+		SafeRelease(&m_pTextFormat);
+		SafeRelease(&m_pNormalBrush);
+		SafeRelease(&m_pSelectBrush);
+	}
+	bool begindraw(HWND hWnd) {
+		HRESULT hr = S_OK;
+		if (!m_pRenderTarget)
+		{
+			RECT rect;
+			GetClientRect(hWnd, &rect);
+			D2D1_SIZE_U size = D2D1::SizeU(rect.right, rect.bottom);
+			hr = m_pD2DFactory->CreateHwndRenderTarget(D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(), 96.0f, 96.0f, D2D1_RENDER_TARGET_USAGE_NONE, D2D1_FEATURE_LEVEL_DEFAULT), D2D1::HwndRenderTargetProperties(hWnd, size), &m_pRenderTarget);
+			if (SUCCEEDED(hr))
+				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &m_pNormalBrush);
+			if (SUCCEEDED(hr))
+				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Red), &m_pSelectBrush);
+		}
+		if (SUCCEEDED(hr))
+		{
+			m_pRenderTarget->BeginDraw();
+		}
+		return SUCCEEDED(hr);
+	}
+	void enddraw() {
+		HRESULT hr = m_pRenderTarget->EndDraw();
+		if (hr == D2DERR_RECREATE_TARGET)
+		{
+			SafeRelease(&m_pRenderTarget);
+			SafeRelease(&m_pNormalBrush);
+			SafeRelease(&m_pSelectBrush);
+		}
+	}
+};
 
 BOOL GetScaling(HWND hWnd, UINT* pnX, UINT* pnY)
 {
@@ -144,24 +232,28 @@ public:
 		return born <= generation && generation < dead;
 	}
 	virtual void kill(UINT64 generation) {
-		dead = generation;
+		if (isalive(generation)) {
+			dead = generation;
+		}
 	}
-	virtual void paint(HDC hdc, const trans* t, UINT64 generation, const point* offset = nullptr) const {
+	virtual void paint(const graphic* g, const trans* t, UINT64 generation, const point* offset = nullptr) const {
 		if (!isalive(generation)) return;
-		const point p1 = { p.x - s.w / 2 + (offset ? offset->x : 0.0), p.y - s.h / 2 + (offset ? offset->y : 0.0) };
-		const point p2 = { p.x + s.w / 2 + (offset ? offset->x : 0.0), p.y + s.h / 2 + (offset ? offset->y : 0.0) };
-		point p3, p4;
-		t->l2d(&p1, &p3);
-		t->l2d(&p2, &p4);
-		HPEN hPen = CreatePen(PS_SOLID, 1, select ? RGB(255, 0, 0) : RGB(0, 0, 0));
-		HPEN hOldPen = (HPEN)SelectObject(hdc, hPen);
-		Rectangle(hdc, (int)p3.x, (int)p3.y, (int)p4.x, (int)p4.y);
-		SelectObject(hdc, hOldPen);
-		DeleteObject(hPen);
-		RECT rect{ (int)p3.x, (int)p3.y, (int)p4.x, (int)p4.y };
-		COLORREF oldColor = SetTextColor(hdc, select ? RGB(255, 0, 0) : RGB(0, 0, 0));
-		DrawText(hdc, name, -1, &rect, DT_SINGLELINE | DT_CENTER | DT_VCENTER);
-		SetTextColor(hdc, oldColor);
+		g->m_pRenderTarget->SetTransform(
+			D2D1::Matrix3x2F::Translation((FLOAT)(t->c.w / 2 + t->p.x - t->l.x), (FLOAT)(t->c.h / 2 + t->p.y - t->l.y)) *
+			D2D1::Matrix3x2F::Scale((FLOAT)t->z, (FLOAT)t->z, D2D1::Point2F((FLOAT)(t->c.w / 2 + t->p.x), (FLOAT)(t->c.h / 2 + t->p.y)))
+		);
+		D2D1_RECT_F rect = {
+			(float)(p.x - s.w / 2 + (offset ? offset->x : 0.0)),
+			(float)(p.y - s.h / 2 + (offset ? offset->y : 0.0)),
+			(float)(p.x + s.w / 2 + (offset ? offset->x : 0.0)),
+			(float)(p.y + s.h / 2 + (offset ? offset->y : 0.0))
+		};
+		D2D1_ROUNDED_RECT rrect;
+		rrect.radiusX = 3.0f;
+		rrect.radiusY = 3.0f;
+		rrect.rect = rect;
+		g->m_pRenderTarget->DrawRoundedRectangle(&rrect, select ? g->m_pSelectBrush : g->m_pNormalBrush);
+		g->m_pRenderTarget->DrawText(name, lstrlenW(name), g->m_pTextFormat, &rect, select ? g->m_pSelectBrush : g->m_pNormalBrush);
 		if (next) {
 			const point p1 = { p.x + (offset ? offset->x : 0.0), p.y + s.h / 2 + (offset ? offset->y : 0.0) };
 			const point p2 = { next->p.x + (offset ? offset->x : 0.0), next->p.y - next->s.h / 2 + (offset ? offset->y : 0.0) };
@@ -169,8 +261,9 @@ public:
 			t->l2d(&p1, &p3);
 			t->l2d(&p2, &p4);
 			POINT p5 = { (int)p3.x, (int)p3.y }, p6 = { (int)p4.x, (int)p4.y };
-			util::DrawArrow(hdc, &p5, &p6, &t->z);
+			//util::DrawArrow(hdc, &p5, &p6, &t->z);
 		}
+		g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 	}
 	virtual bool hit(const point* p, UINT64 generation) const {
 		return
@@ -221,25 +314,25 @@ public:
 			it++;
 		}
 		for (auto i : l) {
-			if (i->dead >= generation) {
+			if (i->dead > generation) {
 				i->dead = UINT64_MAX; // 今生きている人たちには永遠の命を与える
 			}
 		}
 	}
-	void paint(HDC hdc, trans* t, UINT64 generation, point* dragoffset = nullptr) {
+	void paint(const graphic* g, trans* t, UINT64 generation, point* dragoffset = nullptr) {
 		if (dragoffset) {
 			for (auto i : l) {
 				if (!i->isselect(generation))
-					i->paint(hdc, t, generation);
+					i->paint(g, t, generation);
 			}
 			for (auto i : l) {
 				if (i->isselect(generation))
-					i->paint(hdc, t, generation, dragoffset);
+					i->paint(g, t, generation, dragoffset);
 			}
 		}
 		else {
 			for (auto i : l) {
-				i->paint(hdc, t, generation);
+				i->paint(g, t, generation);
 			}
 		}
 	}
@@ -474,6 +567,7 @@ public:
 	node* nn; // 新規作成ノード
 	UINT64 generation;
 	UINT64 maxgeneration;
+	graphic* g;
 
 	void beginedit() {
 		if (generation < maxgeneration)
@@ -488,7 +582,7 @@ public:
 		generation = maxgeneration;
 	}
 
-	NoCodeApp(HWND hMainWnd)
+	NoCodeApp()
 		:hObjectFont(0)
 		, t{}
 		, l{}
@@ -499,21 +593,28 @@ public:
 		, dragjudge(false)
 		, modify(false)
 		, dd(nullptr)
-		, hWnd(hMainWnd)
+		, hWnd(0)
 		, uDpiX(DEFAULT_DPI)
 		, uDpiY(DEFAULT_DPI)
 		, nn(nullptr)
 		, generation(0)
 		, maxgeneration(0)
-	{}
+		, g(nullptr)
+	{
+	}
 
 	void resetFont() {
 		if (hWnd) {
 			GetScaling(hWnd, &uDpiX, &uDpiY);
 			DeleteObject(hObjectFont);
 			hObjectFont = CreateFontW(-POINT2PIXEL((int)(FONT_SIZE * t.z)), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
-			InvalidateRect(hWnd, NULL, TRUE);
+			InvalidateRect(hWnd, NULL, FALSE);
 		}
+	}
+
+	void OnCreate(HWND hWnd) {
+		this->hWnd = hWnd;
+		g = new graphic(hWnd);
 	}
 
 	void OnLButtonDown(int x, int y) {
@@ -535,27 +636,24 @@ public:
 			dragstartP = { x, y };
 			mode = rectselect;
 		}
-		InvalidateRect(hWnd, NULL, TRUE);
+		InvalidateRect(hWnd, NULL, FALSE);
 		SetCapture(hWnd);
 	}
 
 	void OnLButtonUp(int x, int y) {
 		if (mode == dragnode) {
 			if (dragjudge) {
+				dragjudge = false;
 				beginedit();
 				l.selectoffsetmerge(&dragoffset, generation);
-				dragjudge = false;
-				if (dd) l.insert(dd, generation);
 			}
-			else {
-				if (dd) l.select(dd, generation);
-			}
+			if (dd) l.insert(dd, generation);
 			dd = nullptr;
 			dragoffset = { 0.0, 0.0 };
 		}
 		mode = none;
 		ReleaseCapture();
-		InvalidateRect(hWnd, NULL, TRUE);
+		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnMButtonDown(int x, int y) {
@@ -587,7 +685,7 @@ public:
 		}
 
 		mode = rdown;
-		InvalidateRect(hWnd, NULL, TRUE);
+		InvalidateRect(hWnd, NULL, FALSE);
 		SetCapture(hWnd);
 	}
 
@@ -613,7 +711,7 @@ public:
 			point p1{ (double)x, (double)y };
 			t.l.x = dragstartL.x - (p1.x - dragstartP.x) / t.z;
 			t.l.y = dragstartL.y - (p1.y - dragstartP.y) / t.z;
-			InvalidateRect(hWnd, NULL, TRUE);
+			InvalidateRect(hWnd, NULL, FALSE);
 		}
 		else if (mode == dragnode) {
 			point p1{ (double)x, (double)y };
@@ -627,7 +725,7 @@ public:
 				l.disconnectselectnode(generation);
 				dragjudge = true;
 			}
-			InvalidateRect(hWnd, NULL, TRUE);
+			InvalidateRect(hWnd, NULL, FALSE);
 		}
 		else if (mode == rectselect) {
 			point p1{ (double)min(dragstartP.x,x), (double)min(dragstartP.y,y) };
@@ -636,7 +734,7 @@ public:
 			t.d2l(&p1, &p3);
 			t.d2l(&p2, &p4);
 			l.rectselect(&p3, &p4, generation);
-			InvalidateRect(hWnd, NULL, TRUE);
+			InvalidateRect(hWnd, NULL, FALSE);
 			UpdateWindow(hWnd);
 			{
 				HDC hdc = GetDC(hWnd);
@@ -667,13 +765,27 @@ public:
 	void OnDestroy() {
 		l.clear();
 		DeleteObject(hObjectFont);
+		delete g;
+		g = nullptr;
 	}
 
-	void OnPaint(HDC hdc) {
-		HFONT hOldFont = (HFONT)SelectObject(hdc, hObjectFont);
-		l.paint(hdc, &t, generation, mode == dragnode ? &dragoffset : nullptr);
-		if (nn) nn->paint(hdc, &t, generation);
-		SelectObject(hdc, hOldFont);
+	void OnPaint() {
+		if (g) {
+			if (g->begindraw(hWnd)) {
+				g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
+				g->m_pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
+				{
+					//g->m_pRenderTarget->DrawText(sc_helloWorld, ARRAYSIZE(sc_helloWorld) - 1, m_pTextFormat, D2D1::RectF(0, 0, renderTargetSize.width, renderTargetSize.height), m_pBlackBrush);
+
+					//HFONT hOldFont = (HFONT)SelectObject(hdc, hObjectFont);
+					l.paint(g, &t, generation, mode == dragnode ? &dragoffset : nullptr);
+					if (nn) nn->paint(g, &t, generation);
+					//SelectObject(hdc, hOldFont);
+				}
+				g->enddraw();
+			}
+		}
+		ValidateRect(hWnd, NULL);
 	}
 
 	void OnSize(int x, int y, int w, int h) {
@@ -681,6 +793,13 @@ public:
 		t.p.y = y;
 		t.c.w = w;
 		t.c.h = h;
+		if (g && g->m_pRenderTarget)
+		{
+			RECT rect;
+			GetClientRect(hWnd, &rect);
+			D2D1_SIZE_U size = { (UINT32)rect.right, (UINT32)rect.bottom };
+			g->m_pRenderTarget->Resize(size);
+		}
 	}
 
 	void OnBeginDrag(node* n) {
@@ -694,7 +813,7 @@ public:
 			t.d2l(&p1, &p2);
 			nn->p.x = p2.x;
 			nn->p.y = p2.y;
-			InvalidateRect(hWnd, NULL, TRUE);
+			InvalidateRect(hWnd, NULL, FALSE);
 		}
 	}
 
@@ -702,7 +821,7 @@ public:
 		if (nn) {
 			delete nn;
 			nn = nullptr;
-			InvalidateRect(hWnd, NULL, TRUE);
+			InvalidateRect(hWnd, NULL, FALSE);
 		}
 	}
 	
@@ -716,7 +835,7 @@ public:
 			l.add(nn);
 			l.insert(nn, generation);
 			nn = nullptr;
-			InvalidateRect(hWnd, NULL, TRUE);
+			InvalidateRect(hWnd, NULL, FALSE);
 		}
 	}
 
@@ -731,17 +850,17 @@ public:
 		beginedit();
 		l.disconnectselectnode(generation);
 		l.del(generation);
-		InvalidateRect(hWnd, NULL, TRUE);
+		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnUnselect() {
 		l.unselect(generation);
-		InvalidateRect(hWnd, NULL, TRUE);
+		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnAllselect() {
 		l.allselect(generation);
-		InvalidateRect(hWnd, NULL, TRUE);
+		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnNew() {
@@ -780,7 +899,7 @@ public:
 		if (generation > 0) {
 			--generation;
 		}
-		InvalidateRect(hWnd, NULL, TRUE);
+		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnRedo() {
@@ -788,7 +907,11 @@ public:
 		{
 			++generation;
 		}
-		InvalidateRect(hWnd, NULL, TRUE);
+		InvalidateRect(hWnd, NULL, FALSE);
+	}
+
+	void OnDisplayChange() {
+		InvalidateRect(hWnd, 0, 0);
 	}
 };
 
@@ -875,7 +998,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード2"));
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード3"));
 		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード4"));
-
 		{
 			TBBUTTON tbb[] = {
 				{0,ID_UNDO,TBSTATE_ENABLED,TBSTYLE_BUTTON},
@@ -900,8 +1022,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			lStyle = (lStyle | TBSTYLE_FLAT) & ~TBSTYLE_TRANSPARENT;
 			SetWindowLongPtr(hTool, GWL_STYLE, lStyle);
 		}
-
-		pNoCodeApp = new NoCodeApp(hWnd);
+		pNoCodeApp = new NoCodeApp();
+		if (pNoCodeApp) {
+			pNoCodeApp->OnCreate(hWnd);
+		}
 		SendMessage(hWnd, WM_DPICHANGED, 0, 0);
 		break;
 	case WM_RBUTTONDOWN:
@@ -945,13 +1069,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 	case WM_PAINT:
-		{
-			PAINTSTRUCT ps;
-			HDC hdc = BeginPaint(hWnd, &ps);
-			if (pNoCodeApp) {
-				pNoCodeApp->OnPaint(hdc);
-			}
-			EndPaint(hWnd, &ps);
+		if (pNoCodeApp) {
+			pNoCodeApp->OnPaint();
 		}
 		break;
 	case WM_SIZE:
@@ -963,6 +1082,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			if (pNoCodeApp) {
 				pNoCodeApp->OnSize(POINT2PIXEL(128), rect.bottom - rect.top, LOWORD(lParam) - POINT2PIXEL(128), HIWORD(lParam) - (rect.bottom - rect.top));
 			}
+		}
+		break;
+	case WM_DISPLAYCHANGE:
+		if (pNoCodeApp) {
+			pNoCodeApp->OnDisplayChange();
 		}
 		break;
 	case WM_COMMAND:
@@ -1065,6 +1189,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int nCmdShow)
 {
+	HeapSetInformation(0, HeapEnableTerminationOnCorruption, 0, 0);
+	if (FAILED(CoInitialize(0))) return 0;
 	MSG msg;
 	WNDCLASS wndclass = {
 		CS_HREDRAW | CS_VREDRAW,
@@ -1117,6 +1243,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		}
 	}
 	DestroyAcceleratorTable(hAccel);
+	CoUninitialize();
 	return (int)msg.wParam;
 }
 
