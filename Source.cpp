@@ -8,17 +8,23 @@
 #include <windowsx.h>
 #include <commctrl.h>
 #include <list>
+#include <string>
 #include "util.h"
 #include <d2d1_3.h>
 #include <dwrite.h>
 #include <wincodec.h>
-
 #include "resource.h"
+
+#if _DEBUG
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#define new new(_NORMAL_BLOCK, __FILE__, __LINE__)
+#endif
 
 #define DEFAULT_DPI 96
 #define SCALEX(X) MulDiv(X, uDpiX, DEFAULT_DPI)
 #define SCALEY(Y) MulDiv(Y, uDpiY, DEFAULT_DPI)
-#define POINT2PIXEL(PT) MulDiv(PT, uDpiY, 72)
+#define POINT2PIXEL(PT) MulDiv(PT, g_c.uDpiY, 72)
 #define DRAGJUDGEWIDTH POINT2PIXEL(4)
 #define FONT_NAME L"Yu Gothic UI"
 #define FONT_SIZE 14
@@ -40,20 +46,44 @@ template<class Interface> inline void SafeRelease(Interface** ppInterfaceToRelea
 	}
 }
 
+INT_PTR CALLBACK DialogProc(HWND hDlg, unsigned msg, WPARAM wParam, LPARAM lParam)
+{
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+		return TRUE;
+	case WM_ERASEBKGND:
+		return 1;
+	case WM_SIZE:
+		{
+			HWND hWnd = GetTopWindow(hDlg);
+			if (hWnd) {
+				MoveWindow(hWnd, 0, 0, LOWORD(lParam), HIWORD(lParam), 0);
+			}
+		}
+		break;
+	}
+	return FALSE;
+}
+
 class common {
 public:
 	HFONT hUIFont;
 	HWND hTool;
+	HWND hPropContainer;
+	UINT uDpiX = DEFAULT_DPI;
+	UINT uDpiY = DEFAULT_DPI;
+
 	common()
 	: hTool(0)
 	, hUIFont(0)
+	, uDpiX(DEFAULT_DPI)
+	, uDpiY(DEFAULT_DPI)
 	{
 		//CreateFont
 	}
 	~common() {
-
 	}
-
 };
 
 common g_c;
@@ -107,7 +137,7 @@ public:
 			RECT rect;
 			GetClientRect(hWnd, &rect);
 			D2D1_SIZE_U size = D2D1::SizeU(rect.right, rect.bottom);
-			hr = m_pD2DFactory->CreateHwndRenderTarget(D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(), 96.0f, 96.0f, D2D1_RENDER_TARGET_USAGE_NONE, D2D1_FEATURE_LEVEL_DEFAULT), D2D1::HwndRenderTargetProperties(hWnd, size), &m_pRenderTarget);
+			hr = m_pD2DFactory->CreateHwndRenderTarget(D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(), DEFAULT_DPI, DEFAULT_DPI, D2D1_RENDER_TARGET_USAGE_NONE, D2D1_FEATURE_LEVEL_DEFAULT), D2D1::HwndRenderTargetProperties(hWnd, size), &m_pRenderTarget);
 			if (SUCCEEDED(hr))
 				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &m_pNormalBrush);
 			if (SUCCEEDED(hr))
@@ -212,9 +242,97 @@ public:
 	}
 };
 
+enum PROPERTY_KIND {
+	PROPERTY_NONE,
+	PROPERTY_INT,
+	PROPERTY_CHECK,
+	PROPERTY_STRING,
+	PROPERTY_DATE,
+	PROPERTY_TIME,
+	PROPERTY_IP,
+	PROPERTY_PICTURE,
+	PROPERTY_COLOR,
+	PROPERTY_SELECT,
+	PROPERTY_CUSTOM
+};
+
+class propertyitem {
+public:
+	PROPERTY_KIND kind;
+	bool updated;
+	bool required;
+	std::wstring* name;
+	std::wstring* help;
+	std::wstring* description;
+	std::wstring* value;
+	std::wstring* unit;
+	std::wstring* match;
+	propertyitem() : kind(PROPERTY_NONE), updated(false), required(false), name(0), help(0), description(0), value(0), unit(0), match(0){}
+	~propertyitem() {
+		delete name;
+		delete help;
+		delete description;
+		delete value;
+		delete unit;
+		delete match;
+	}
+	propertyitem* copy() const {
+		propertyitem* n = new propertyitem;
+		n->kind = kind;
+		n->required = required;
+		if (name) n->name = new std::wstring(*name);
+		if (help) n->help = new std::wstring(*help);
+		if (description) n->description = new std::wstring(*description);
+		if (value) n->value = new std::wstring(*value);
+		if (unit) n->unit = new std::wstring(*unit);
+		if (match) n->match = new std::wstring(*match);
+		return n;
+	}
+	void setname(LPCWSTR lpszName) {
+		name = new std::wstring(lpszName);
+	}
+	void sethelp(LPCWSTR lpszHelp) {
+		help = new std::wstring(lpszHelp);
+	}
+	void setdescription(LPCWSTR lpszDescription) {
+		description = new std::wstring(lpszDescription);
+	}
+	void setvalue(LPCWSTR lpszValue) {
+		value = new std::wstring(lpszValue);
+	}
+	void setunit(LPCWSTR lpszUnit) {
+		unit = new std::wstring(lpszUnit);
+	}
+	void setmatch(LPCWSTR lpszMatch) {
+		match = new std::wstring(lpszMatch);
+	}
+};
+
+class propertyitemlist {
+public:
+	std::list<propertyitem*> l;
+	propertyitemlist() : l{} {}
+	~propertyitemlist() {
+		for (auto i : l) {
+			delete i;
+		}
+		l.clear();
+	}
+	propertyitemlist* copy() const {
+		propertyitemlist* nl = new propertyitemlist;
+		for (auto i : l) {
+			nl->l.push_back(i->copy());
+		}
+		return nl;
+	}
+};
+
 enum NODE_KIND {
 	NODE_NONE,
-	NODE_NORMAL,
+	NODE_NORMAL1,
+	NODE_NORMAL2,
+	NODE_NORMAL3,
+	NODE_NORMAL4,
 	NODE_START,
 	NODE_END,
 	NODE_IF,
@@ -237,7 +355,23 @@ public:
 	node* prev;
 	UINT64 born;
 	UINT64 dead;
-	node(UINT64 initborn) : kind(NODE_NORMAL), next{}, prev{}, p{ 0.0, 0.0 }, s{ 0.0, 0.0 }, name{}, select(false), born(initborn), dead(UINT64_MAX) {}
+	propertyitemlist* pl;
+	void setproperty(const propertyitem* pi) {
+		if (pl) {
+			std::list<propertyitem*>::iterator it;
+			for (it = pl->l.begin(); it != pl->l.end(); ++it)
+			{
+				if ((*it)->name == pi->name)
+				{
+					delete (*it);
+					*it = pi->copy();
+				}
+			}
+		}
+	}
+	node(UINT64 initborn) : kind(NODE_NONE), next{}, prev{}, p{ 0.0, 0.0 }, s{NODE_WIDTH, NODE_HEIGHT}, name{}, select(false), born(initborn), dead(UINT64_MAX), pl(0) {
+		pl = new propertyitemlist;
+	}
 	node(const node* src, UINT64 initborn) {
 		select = src->select;
 		lstrcpy(name, src->name);
@@ -248,9 +382,12 @@ public:
 		prev = src->prev;
 		born = initborn;
 		dead = UINT64_MAX;
+		pl = src->pl->copy();
 	}
-	~node() {}
-	node* copy(UINT64 generation) const {
+	virtual ~node() {
+		delete pl;
+	}
+	virtual node* copy(UINT64 generation) const {
 		node* newnode = new node(this, generation);
 		return newnode;
 	}
@@ -313,6 +450,83 @@ public:
 	virtual void setselect(bool b, UINT64 generation) {
 		if (isalive(generation)) {
 			select = b;
+		}
+	}
+};
+
+class node_normal_1 :public node
+{
+public:
+	node_normal_1(UINT64 initborn) : node(initborn) {
+		kind = NODE_NORMAL1;
+		propertyitem* pi = new propertyitem;
+		pi->kind = PROPERTY_STRING;
+		pi->setname(L"名前1");
+		pi->sethelp(L"名前");
+		pi->setdescription(L"名前");
+		pi->setvalue(L"1");
+		pi->setunit(L"個");
+		pi->setmatch(L"個");
+		pl->l.push_back(pi);
+	}
+};
+
+class node_normal_2 :public node
+{
+public:
+	node_normal_2(UINT64 initborn) : node(initborn) {
+		kind = NODE_NORMAL2;
+		for (int i = 0; i < 2; i++)
+		{
+			propertyitem* pi = new propertyitem;
+			pi->kind = PROPERTY_STRING;
+			pi->setname(L"名前2");
+			pi->sethelp(L"名前");
+			pi->setdescription(L"名前");
+			pi->setvalue(L"2");
+			pi->setunit(L"個");
+			pi->setmatch(L"個");
+			pl->l.push_back(pi);
+		}
+	}
+};
+
+class node_normal_3 :public node
+{
+public:
+	node_normal_3(UINT64 initborn) : node(initborn) {
+		kind = NODE_NORMAL3;
+		for (int i = 0; i < 3; i++)
+		{
+			propertyitem* pi = new propertyitem;
+			pi->kind = PROPERTY_STRING;
+			pi->setname(L"名前3");
+			pi->sethelp(L"名前");
+			pi->setdescription(L"名前");
+			pi->setvalue(L"3");
+			pi->setunit(L"個");
+			pi->setmatch(L"個");
+			pl->l.push_back(pi);
+		}
+	}
+};
+
+class node_normal_4 :public node
+{
+public:
+	node_normal_4(UINT64 initborn) : node(initborn) {
+		kind = NODE_NORMAL4;
+		for (int i = 0; i < 4; i++)
+		{
+			propertyitem* pi = new propertyitem;
+			pi->kind = PROPERTY_STRING;
+			pi->setname(L"名前4");
+			pi->sethelp(L"名前");
+			pi->setdescription(L"名前");
+			pi->setvalue(L"4");
+			pi->setunit(L"個");
+			pi->setmatch(L"個");
+			pl->l.push_back(pi);
 		}
 	}
 };
@@ -440,6 +654,14 @@ public:
 				selectnode->push_back(i);
 			}
 		}
+	}
+	node* getfirstselectobject(UINT64 generation) const {
+		for (auto i : l) {
+			if (i->isselect(generation)) {
+				return i;
+			}
+		}
+		return 0;
 	}
 	void selectoffsetmerge(const point* dragoffset, UINT64 generation) {
 		std::list<node*> selectnode;
@@ -608,6 +830,11 @@ public:
 	UINT64 maxgeneration;
 	graphic* g;
 	std::list<node*> selectnode;
+	int editkind;
+
+	node* GetFirstSelectObject() const {
+		return l.getfirstselectobject(generation);
+	}
 
 	void RefreshToolBar() {
 
@@ -621,23 +848,24 @@ public:
 
 		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_ZOOM, ZOOM_MAX > t.z);
 		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_SHRINK, ZOOM_MIN < t.z);
-
-
 	}
 
-	void beginedit() {
-		if (generation < maxgeneration)
-		{
-			l.setbornanddead(generation);
-			maxgeneration = generation + 1;
+	bool beginedit(int kind = -1) {
+		if (kind == -1 || kind != editkind) {
+			if (generation < maxgeneration)
+			{
+				l.setbornanddead(generation);
+				maxgeneration = generation + 1;
+			}
+			else
+			{
+				++maxgeneration;
+			}
+			generation = maxgeneration;
+			RefreshToolBar();
+			return true;
 		}
-		else
-		{
-			++maxgeneration;
-		}
-		generation = maxgeneration;
-
-		RefreshToolBar();
+		return false;
 	}
 
 	NoCodeApp()
@@ -658,12 +886,15 @@ public:
 		, maxgeneration(0)
 		, g(nullptr)
 		, selectnode{}
+		, editkind(-1)
 	{
 	}
 
 	void OnCreate(HWND hWnd) {
 		this->hWnd = hWnd;
 		g = new graphic(hWnd);
+		OnProperty();
+		RefreshToolBar();
 	}
 
 	void OnLButtonDown(int x, int y) {
@@ -678,7 +909,7 @@ public:
 			else if (!dd->isselect(generation)/*!l.isselect(dd, generation)*/){
 				l.select(dd, generation); // 選択されていないときは1つ選択する
 			}
-			SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
+			OnProperty();
 			dragstartP = { x, y };
 			dragstartL = p2;
 			mode = dragnode;
@@ -690,7 +921,7 @@ public:
 			}
 			else {
 				l.unselect(generation);
-				SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
+				OnProperty();
 			}
 			dragstartP = { x, y };
 			mode = rectselect;
@@ -709,7 +940,11 @@ public:
 			}
 			else if (dd && dd->isselect(generation))
 			{
-				l.select(dd, generation);
+				if (GetKeyState(VK_CONTROL) < 0) {} else
+				{
+					l.select(dd, generation);
+					OnProperty();
+				}
 			}
 			dd = nullptr;
 			dragoffset = { 0.0, 0.0 };
@@ -742,14 +977,14 @@ public:
 		if (dd) {
 			if (!l.isselect(dd, generation)) {
 				l.select(dd, generation); // 選択されていないときは1つ選択する
-				SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
+				OnProperty();
 			}
 			dragstartP = { x, y };
 			dragstartL = p2;
 		}
 		else {
 			l.unselect(generation);
-			SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
+			OnProperty();
 		}
 
 		mode = rdown;
@@ -803,7 +1038,7 @@ public:
 			t.d2l(&p1, &p3);
 			t.d2l(&p2, &p4);
 			l.rectselect(&p3, &p4, generation, &selectnode);
-			SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
+			OnProperty();
 			RefreshToolBar();
 			InvalidateRect(hWnd, NULL, FALSE);
 			UpdateWindow(hWnd);
@@ -894,7 +1129,7 @@ public:
 			l.add(nn);
 			l.insert(nn, generation);
 			nn = nullptr;
-			SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
+			OnProperty();
 			RefreshToolBar();
 			InvalidateRect(hWnd, NULL, FALSE);
 		}
@@ -912,19 +1147,21 @@ public:
 		beginedit();
 		l.disconnectselectnode(generation);
 		l.del(generation);
+		OnProperty();
 		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnUnselect() {
 		l.unselect(generation);
-		SendMessage(hWnd, WM_COMMAND, ID_PROPERTY, 0);
+		OnProperty();
 		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnAllselect() {
 		l.allselect(generation);
+		OnProperty();
 		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
@@ -940,6 +1177,7 @@ public:
 		l.clear();
 		t.l = { 0.0, 0.0 };
 		t.z = 1.0;
+		OnProperty();
 		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
@@ -980,6 +1218,7 @@ public:
 		if (generation > 0) {
 			--generation;
 		}
+		OnProperty();
 		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
@@ -989,6 +1228,7 @@ public:
 		{
 			++generation;
 		}
+		OnProperty();
 		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
@@ -997,22 +1237,161 @@ public:
 		InvalidateRect(hWnd, 0, 0);
 	}
 
-	NODE_KIND GetSelectKind() const {
-		NODE_KIND nKind = NODE_NONE;
+	static BOOL CALLBACK EnumChildSetFontProc(HWND hWnd, LPARAM lParam)
+	{
+		SendMessage(hWnd, WM_SETFONT, (WPARAM)g_c.hUIFont, TRUE);
+		return TRUE;
+	}
+
+	static INT_PTR CALLBACK DialogProc(HWND hDlg, unsigned msg, WPARAM wParam, LPARAM lParam)
+	{
+		static NoCodeApp* pNoCodeApp;
+		switch (msg)
+		{
+		case  WM_CTLCOLORDLG:
+		case  WM_CTLCOLORSTATIC:
+			return (INT_PTR)((HBRUSH)GetStockObject(WHITE_BRUSH));
+		case WM_INITDIALOG:
+			pNoCodeApp = (NoCodeApp*)lParam;
+			if (pNoCodeApp) {
+				RECT rect;
+				GetClientRect(GetParent(hDlg), &rect);
+				MoveWindow(hDlg, 0, 0, rect.right, rect.bottom, 0);
+				node* n = pNoCodeApp->GetFirstSelectObject();
+				if (n && n->pl) {
+					int nYtop = 0;
+					for (auto i : n->pl->l) {
+						switch (i->kind) {
+						case PROPERTY_STRING:
+							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name+L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT |SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
+							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, 0, GetModuleHandle(0), 0);
+							CreateWindowEx(0, L"STATIC", (i->unit) ? (i->unit->c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, POINT2PIXEL(64 + 128 + 32), nYtop, POINT2PIXEL(32), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
+							break;
+						}
+						nYtop += POINT2PIXEL(32);
+					}
+				}
+			}
+			EnumChildWindows(hDlg, EnumChildSetFontProc, 0);
+			//SetFocus(GetTopWindow(hDlg));
+			return TRUE;
+		case WM_COMMAND:
+			if (pNoCodeApp) {
+				if (HIWORD(wParam) == EN_UPDATE) {
+				}
+			}
+			break;
+		}
+		return FALSE;
+	}
+
+	void UpdateSelectNode(node* dstnode, int editkind = -1) {
+		if (dstnode && beginedit(editkind)) {
+			std::list<node*> selectnode;
+			l.selectlistup(&selectnode, generation);
+			for (auto i : selectnode) {
+				i->kill(generation);
+				node* newnode = new node(i, generation);
+				if (dstnode->pl) {
+					for (auto i : dstnode->pl->l) {
+						if (i->updated) {
+
+						}
+					}
+				}
+				l.add(newnode);
+			}
+		}
+	}
+
+	void OnProperty() {
+		WCHAR szTitle[32] = {};
+		GetWindowText(g_c.hPropContainer, szTitle, _countof(szTitle));
+		node* n = 0;
+		switch (GetSelectKind(n)) {
+		case NODE_NONE:
+			//if (lstrcmpi(szTitle, L"NODE_NONE") != 0)
+			{
+				SetWindowText(g_c.hPropContainer, L"NODE_NONE");
+				DestroyWindow(GetTopWindow(g_c.hPropContainer));
+				CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NONE), g_c.hPropContainer, DialogProc, (LPARAM)0);
+			}
+			break;
+		case NODE_NORMAL1:
+			//if (lstrcmpi(szTitle, L"NODE_NORMAL") != 0)
+		{
+			SetWindowText(g_c.hPropContainer, L"NODE_NORMAL1");
+			DestroyWindow(GetTopWindow(g_c.hPropContainer));
+			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), g_c.hPropContainer, DialogProc, (LPARAM)this);
+		}
+		break;
+		case NODE_NORMAL2:
+			//if (lstrcmpi(szTitle, L"NODE_NORMAL") != 0)
+		{
+			SetWindowText(g_c.hPropContainer, L"NODE_NORMAL2");
+			DestroyWindow(GetTopWindow(g_c.hPropContainer));
+			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), g_c.hPropContainer, DialogProc, (LPARAM)this);
+		}
+		break;
+		case NODE_NORMAL3:
+			//if (lstrcmpi(szTitle, L"NODE_NORMAL") != 0)
+		{
+			SetWindowText(g_c.hPropContainer, L"NODE_NORMAL3");
+			DestroyWindow(GetTopWindow(g_c.hPropContainer));
+			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), g_c.hPropContainer, DialogProc, (LPARAM)this);
+		}
+		break;
+		case NODE_NORMAL4:
+			//if (lstrcmpi(szTitle, L"NODE_NORMAL") != 0)
+		{
+			SetWindowText(g_c.hPropContainer, L"NODE_NORMAL4");
+			DestroyWindow(GetTopWindow(g_c.hPropContainer));
+			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), g_c.hPropContainer, DialogProc, (LPARAM)this);
+		}
+		break;
+		case NODE_MULTI:
+			//if (lstrcmpi(szTitle, L"NODE_MULTI") != 0)
+			{
+				SetWindowText(g_c.hPropContainer, L"NODE_MULTI");
+				DestroyWindow(GetTopWindow(g_c.hPropContainer));
+				CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_MULTI), g_c.hPropContainer, DialogProc, (LPARAM)0);
+			}
+			break;
+		}
+		SetFocus(g_c.hPropContainer);
+	}
+
+	NODE_KIND GetSelectKind(node *n) const {
+		const int selcount = l.selectcount(generation);
+		if (selcount > 1)
+			return NODE_MULTI;
+		if (selcount == 0)
+			return NODE_NONE;
 		std::list<node*> selectnode;
 		l.selectlistup(&selectnode, generation);
 		for (auto i : selectnode) {
-			if (nKind != i->kind) {
-				if (nKind == NODE_NONE) {
-					nKind = i->kind;
-				}
-				else {
-					nKind = NODE_MULTI;
-					break;
+			n = i;
+			return i->kind;
+		}
+		return NODE_NONE;
+		// ひと先ず上記の単一選択だけ
+		if (0) {
+			NODE_KIND nKind = NODE_NONE;
+			std::list<node*> selectnode;
+			l.selectlistup(&selectnode, generation);
+			for (auto i : selectnode) {
+				if (nKind != i->kind) {
+					if (nKind == NODE_NONE) {
+						nKind = i->kind;
+					}
+					else {
+						nKind = NODE_MULTI;
+						break;
+					}
 				}
 			}
+			return nKind;
 		}
-		return nKind;
 	}
 };
 
@@ -1040,29 +1419,10 @@ LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
 	return 0;
 }
 
-INT_PTR CALLBACK DialogProc(HWND hDlg, unsigned msg, WPARAM wParam, LPARAM lParam)
-{
-	switch (msg)
-	{
-	case WM_INITDIALOG:
-		return TRUE;
-	}
-	return FALSE;
-}
-
-BOOL CALLBACK EnumChildProc(HWND hWnd, LPARAM lParam)
-{
-	DestroyWindow(hWnd);
-	return TRUE;
-}
-
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	static UINT uDpiX = DEFAULT_DPI, uDpiY = DEFAULT_DPI;
 	static UINT dragMsg;
 	static HWND hList;
-	static HWND hDlg;
-	static HFONT hUIFont;
 	static NoCodeApp* pNoCodeApp;
 	if (msg == dragMsg) {
 		static int nDragItem;
@@ -1071,13 +1431,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case DL_BEGINDRAG:
 			nDragItem = LBItemFromPt(lpdli->hWnd, lpdli->ptCursor, TRUE);
 			if (nDragItem != -1) {
-				node* nn = new node(0);
-				nn->s.w = NODE_WIDTH;
-				nn->s.h = NODE_HEIGHT;
-				nn->setselect(true, 0);
-				SendMessage(lpdli->hWnd, LB_GETTEXT, nDragItem, (LPARAM)nn->name);
-				if (pNoCodeApp) {
-					pNoCodeApp->OnBeginDrag(nn);
+				node* n = (node*)SendMessage(lpdli->hWnd, LB_GETITEMDATA, nDragItem, 0);
+				if (n) {
+					node* nn = new node(n, 0);
+					nn->setselect(true, 0);
+					SendMessage(lpdli->hWnd, LB_GETTEXT, nDragItem, (LPARAM)nn->name);
+					if (pNoCodeApp) {
+						pNoCodeApp->OnBeginDrag(nn);
+					}
 				}
 			}
 			return TRUE;
@@ -1110,47 +1471,80 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_CREATE:
 		dragMsg = RegisterWindowMessage(DRAGLISTMSGSTRING);
 		hList = CreateWindow(L"LISTBOX", 0, WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOINTEGRALHEIGHT, 0, 0, 0, 0, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
+		SendMessage(hWnd, WM_APP, 0, 0);
 		MakeDragList(hList);
-		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード1"));
-		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード2"));
-		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード3"));
-		SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード4"));
+		{
+			const int nIndex = (int)SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード1"));
+			if (nIndex != LB_ERR)
+			{
+				node* n = new node_normal_1(0);
+				SendMessage(hList, LB_SETITEMDATA, nIndex, (LPARAM)n);
+			}
+		}
+		{
+			const int nIndex = (int)SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード2"));
+			if (nIndex != LB_ERR)
+			{
+				node* n = new node_normal_2(0);
+				SendMessage(hList, LB_SETITEMDATA, nIndex, (LPARAM)n);
+			}
+		}
+		{
+			const int nIndex = (int)SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード3"));
+			if (nIndex != LB_ERR)
+			{
+				node* n = new node_normal_3(0);
+				SendMessage(hList, LB_SETITEMDATA, nIndex, (LPARAM)n);
+			}
+		}
+		{
+			const int nIndex = (int)SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード4"));
+			if (nIndex != LB_ERR)
+			{
+				node* n = new node_normal_4(0);
+				SendMessage(hList, LB_SETITEMDATA, nIndex, (LPARAM)n);
+			}
+		}
 		{
 			TBBUTTON tbb[] = {
-				{0,ID_UNDO,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{1,ID_REDO,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{2,ID_RUN,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{3,ID_SUSPEND,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{4,ID_STOP,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{5,ID_COPY,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{6,ID_CUT,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{7,ID_PASTE,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{8,ID_DELETE,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{9,ID_SAVE,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{10,ID_OPEN,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{11,ID_EXIT,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{12,ID_ZOOM,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{13,ID_SHRINK,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{14,ID_HOME,TBSTATE_ENABLED,TBSTYLE_BUTTON},
-				{15,ID_HELP,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{0,ID_NEW,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{1,ID_OPEN,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{2,ID_SAVE,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{3,ID_EXIT,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{ 0 , 0 , TBSTATE_ENABLED , TBSTYLE_SEP , 0 , 0 , 0 } ,
+				{4,ID_UNDO,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{5,ID_REDO,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{6,ID_COPY,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{7,ID_CUT,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{8,ID_PASTE,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{9,ID_DELETE,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{ 0 , 0 , TBSTATE_ENABLED , TBSTYLE_SEP , 0 , 0 , 0 } ,
+				{10,ID_RUN,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{11,ID_SUSPEND,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{12,ID_STOP,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{ 0 , 0 , TBSTATE_ENABLED , TBSTYLE_SEP , 0 , 0 , 0 } ,
+				{13,ID_ZOOM,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{14,ID_SHRINK,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{15,ID_HOME,TBSTATE_ENABLED,TBSTYLE_BUTTON},
+				{ 0 , 0 , TBSTATE_ENABLED , TBSTYLE_SEP , 0 , 0 , 0 } ,
+				{16,ID_HELP,TBSTATE_ENABLED,TBSTYLE_BUTTON},
 			};
 			g_c.hTool = CreateToolbarEx(hWnd, WS_CHILD | WS_VISIBLE, 0, _countof(tbb), ((LPCREATESTRUCT)lParam)->hInstance, IDR_TOOLBAR1, tbb, _countof(tbb), 0, 0, 64, 64, sizeof(TBBUTTON));
 			LONG_PTR lStyle = GetWindowLongPtr(g_c.hTool, GWL_STYLE);
 			lStyle = (lStyle | TBSTYLE_FLAT) & ~TBSTYLE_TRANSPARENT;
 			SetWindowLongPtr(g_c.hTool, GWL_STYLE, lStyle);
 		}
-		hDlg = CreateDialog(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDD_DIALOG1), hWnd, DialogProc);
+		g_c.hPropContainer = CreateDialog(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDD_PROPERTY), hWnd, DialogProc);
 		pNoCodeApp = new NoCodeApp();
 		if (pNoCodeApp) {
 			pNoCodeApp->OnCreate(hWnd);
 		}
-		SendMessage(hWnd, WM_APP, 0, 0);
 		break;
-	case WM_APP:
-		GetScaling(hWnd, &uDpiX, &uDpiY);
-		DeleteObject(hUIFont);
-		hUIFont = CreateFontW(-POINT2PIXEL(FONT_SIZE), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
-		SendMessage(hList, WM_SETFONT, (WPARAM)hUIFont, 0);
+	case WM_APP: // 画面DPIが変わった時、ウィンドウ作成時にフォントの生成を行う
+		GetScaling(hWnd, &g_c.uDpiX, &g_c.uDpiY);
+		DeleteObject(g_c.hUIFont);
+		g_c.hUIFont = CreateFontW(-POINT2PIXEL(FONT_SIZE), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
+		SendMessage(hList, WM_SETFONT, (WPARAM)g_c.hUIFont, 0);
 		break;
 	case WM_RBUTTONDOWN:
 		if (pNoCodeApp) {
@@ -1203,7 +1597,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			RECT rect;
 			GetWindowRect(g_c.hTool, &rect);
 			MoveWindow(hList, 0, rect.bottom - rect.top, POINT2PIXEL(128), HIWORD(lParam) - (rect.bottom - rect.top), 1);
-			MoveWindow(hDlg, LOWORD(lParam) - POINT2PIXEL(256), rect.bottom - rect.top, POINT2PIXEL(256), HIWORD(lParam) - (rect.bottom - rect.top), 1);
+			MoveWindow(g_c.hPropContainer, LOWORD(lParam) - POINT2PIXEL(256), rect.bottom - rect.top, POINT2PIXEL(256), HIWORD(lParam) - (rect.bottom - rect.top), 1);
 			if (pNoCodeApp) {
 				pNoCodeApp->OnSize(POINT2PIXEL(128), rect.bottom - rect.top, LOWORD(lParam) - POINT2PIXEL(128) - POINT2PIXEL(256), HIWORD(lParam) - (rect.bottom - rect.top));
 			}
@@ -1267,34 +1661,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			break;
 		case ID_PROPERTY:
 			if (pNoCodeApp) {
-				WCHAR szTitle[32] = {};
-				GetWindowText(hDlg, szTitle, _countof(szTitle));
-				switch (pNoCodeApp->GetSelectKind()) {
-				case NODE_NONE:
-					if (lstrcmpi(szTitle, L"NODE_NONE") != 0)
-					{
-						SetWindowText(hDlg, L"NODE_NONE");
-						EnumChildWindows(hDlg, EnumChildProc, 0);
-						CreateDialog(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NONE), hDlg, DialogProc);
-					}
-					break;
-				case NODE_NORMAL:
-					if (lstrcmpi(szTitle, L"NODE_NORMAL") != 0)
-					{
-						SetWindowText(hDlg, L"NODE_NORMAL");
-						EnumChildWindows(hDlg, EnumChildProc, 0);
-						CreateDialog(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), hDlg, DialogProc);
-					}
-					break;
-				case NODE_MULTI:
-					if (lstrcmpi(szTitle, L"NODE_MULTI") != 0)
-					{
-						SetWindowText(hDlg, L"NODE_MULTI");
-						EnumChildWindows(hDlg, EnumChildProc, 0);
-						CreateDialog(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_MULTI), hDlg, DialogProc);
-					}
-					break;
-				}
+				pNoCodeApp->OnProperty();
 			}
 			break;
 		}
@@ -1323,10 +1690,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SendMessage(hWnd, WM_APP, 0, 0);
 		break;
 	case WM_DESTROY:
+		if (hList) {
+			int nIndexMax = (int)SendMessage(hList, LB_GETCOUNT, 0, 0);
+			for (int i = 0; i < nIndexMax; i++) {
+				node* n = (node*)SendMessage(hList, LB_GETITEMDATA, i, 0);
+				if (n) {
+					delete n;
+				}
+			}
+		}
 		if (pNoCodeApp) {
 			pNoCodeApp->OnDestroy();
 		}
-		DeleteObject(hUIFont);
+		DeleteObject(g_c.hUIFont);
 		delete pNoCodeApp;
 		pNoCodeApp = nullptr;
 		PostQuitMessage(0);
@@ -1339,6 +1715,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int nCmdShow)
 {
+#if _DEBUG
+	_CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
+#endif
+
 	HeapSetInformation(0, HeapEnableTerminationOnCorruption, 0, 0);
 	if (FAILED(CoInitialize(0))) return 0;
 	MSG msg;
@@ -1350,7 +1730,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		hInstance,
 		LoadIcon(hInstance,(LPCTSTR)IDI_ICON1),
 		LoadCursor(0,IDC_ARROW),
-		(HBRUSH)(COLOR_WINDOW + 1),
+		0,
 		MAKEINTRESOURCE(IDR_MAIN),
 		szClassName
 	};
@@ -1368,6 +1748,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		hInstance,
 		0
 	);
+
 	ShowWindow(hWnd, SW_SHOWDEFAULT);
 	UpdateWindow(hWnd);
 	ACCEL Accel[] = {

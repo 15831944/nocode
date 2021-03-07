@@ -51,8 +51,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,7
- PRODUCTVERSION 1,0,0,7
+ FILEVERSION 1,0,0,8
+ PRODUCTVERSION 1,0,0,8
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -69,12 +69,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "hack.jp"
             VALUE "FileDescription", "NoCode Editor"
-            VALUE "FileVersion", "1.0.0.7"
+            VALUE "FileVersion", "1.0.0.8"
             VALUE "InternalName", "NoCode.exe"
             VALUE "LegalCopyright", "Copyright (C) 2021"
             VALUE "OriginalFilename", "NoCode.exe"
             VALUE "ProductName", "NoCode"
-            VALUE "ProductVersion", "1.0.0.7"
+            VALUE "ProductVersion", "1.0.0.8"
         END
     END
     BLOCK "VarFileInfo"
@@ -183,31 +183,30 @@ END
 // Dialog
 //
 
-IDD_DIALOG1 DIALOGEX 0, 0, 310, 176
-STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_VISIBLE
-FONT 8, "MS Shell Dlg", 400, 0, 0x1
+IDD_PROPERTY DIALOGEX 0, 0, 310, 176
+STYLE DS_SETFONT | WS_CHILD | WS_VISIBLE | WS_BORDER
+FONT 20, "Yu Gothic UI", 400, 0, 0x80
 BEGIN
 END
 
 IDD_PROPERTY_NORMAL DIALOGEX 0, 0, 310, 176
-STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_VISIBLE
-FONT 8, "MS Shell Dlg", 400, 0, 0x1
+STYLE DS_SETFONT | WS_CHILD | WS_VISIBLE
+FONT 20, "Yu Gothic UI", 400, 0, 0x80
 BEGIN
-    LTEXT           "のーまる",IDC_STATIC,7,7,23,8
 END
 
 IDD_PROPERTY_MULTI DIALOGEX 0, 0, 310, 176
-STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_VISIBLE
-FONT 8, "MS Shell Dlg", 400, 0, 0x1
+STYLE DS_SETFONT | WS_CHILD | WS_VISIBLE
+FONT 20, "Yu Gothic UI", 400, 0, 0x80
 BEGIN
-    LTEXT           "マルチ",IDC_STATIC,7,7,18,8
+    LTEXT           "複数選択",IDC_STATIC,0,0,194,79
 END
 
 IDD_PROPERTY_NONE DIALOGEX 0, 0, 310, 176
-STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD | WS_VISIBLE
-FONT 8, "MS Shell Dlg", 400, 0, 0x1
+STYLE DS_SETFONT | WS_CHILD | WS_VISIBLE
+FONT 20, "Yu Gothic UI", 400, 0, 0x80
 BEGIN
-    LTEXT           "NONE",IDC_STATIC,7,7,20,8
+    LTEXT           "未選択",IDC_STATIC,0,0,182,50
 END
 
 
@@ -218,21 +217,22 @@ END
 
 IDR_TOOLBAR1 TOOLBAR 64, 64
 BEGIN
+    BUTTON      ID_NEW
+    BUTTON      ID_OPEN
+    BUTTON      ID_SAVE
+    BUTTON      ID_EXIT
+    SEPARATOR
     BUTTON      ID_UNDO
     BUTTON      ID_REDO
-    SEPARATOR
-    BUTTON      ID_RUN
-    BUTTON      ID_SUSPEND
-    BUTTON      ID_STOP
     SEPARATOR
     BUTTON      ID_COPY
     BUTTON      ID_CUT
     BUTTON      ID_PASTE
     BUTTON      ID_DELETE
     SEPARATOR
-    BUTTON      ID_SAVE
-    BUTTON      ID_OPEN
-    BUTTON      ID_EXIT
+    BUTTON      ID_RUN
+    BUTTON      ID_SUSPEND
+    BUTTON      ID_STOP
     SEPARATOR
     BUTTON      ID_ZOOM
     BUTTON      ID_SHRINK
@@ -257,7 +257,7 @@ IDR_TOOLBAR1            BITMAP                  "toolbar1.bmp"
 #ifdef APSTUDIO_INVOKED
 GUIDELINES DESIGNINFO
 BEGIN
-    IDD_DIALOG1, DIALOG
+    IDD_PROPERTY, DIALOG
     BEGIN
         LEFTMARGIN, 7
         RIGHTMARGIN, 303
@@ -283,10 +283,6 @@ BEGIN
 
     IDD_PROPERTY_NONE, DIALOG
     BEGIN
-        LEFTMARGIN, 7
-        RIGHTMARGIN, 303
-        TOPMARGIN, 7
-        BOTTOMMARGIN, 169
     END
 END
 #endif    // APSTUDIO_INVOKED
@@ -297,7 +293,7 @@ END
 // AFX_DIALOG_LAYOUT
 //
 
-IDD_DIALOG1 AFX_DIALOG_LAYOUT
+IDD_PROPERTY AFX_DIALOG_LAYOUT
 BEGIN
     0
 END
