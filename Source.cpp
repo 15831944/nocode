@@ -8,6 +8,7 @@
 #include <windowsx.h>
 #include <commctrl.h>
 #include <list>
+#include <vector>
 #include <string>
 #include "util.h"
 #include <d2d1_3.h>
@@ -259,7 +260,6 @@ enum PROPERTY_KIND {
 class propertyitem {
 public:
 	PROPERTY_KIND kind;
-	bool updated;
 	bool required;
 	std::wstring* name;
 	std::wstring* help;
@@ -267,7 +267,7 @@ public:
 	std::wstring* value;
 	std::wstring* unit;
 	std::wstring* match;
-	propertyitem() : kind(PROPERTY_NONE), updated(false), required(false), name(0), help(0), description(0), value(0), unit(0), match(0){}
+	propertyitem() : kind(PROPERTY_NONE), required(false), name(0), help(0), description(0), value(0), unit(0), match(0){}
 	~propertyitem() {
 		delete name;
 		delete help;
@@ -310,7 +310,8 @@ public:
 
 class propertyitemlist {
 public:
-	std::list<propertyitem*> l;
+	std::wstring description;
+	std::vector<propertyitem*> l;
 	propertyitemlist() : l{} {}
 	~propertyitemlist() {
 		for (auto i : l) {
@@ -320,6 +321,7 @@ public:
 	}
 	propertyitemlist* copy() const {
 		propertyitemlist* nl = new propertyitemlist;
+		nl->description = description;
 		for (auto i : l) {
 			nl->l.push_back(i->copy());
 		}
@@ -356,17 +358,9 @@ public:
 	UINT64 born;
 	UINT64 dead;
 	propertyitemlist* pl;
-	void setproperty(const propertyitem* pi) {
+	void setpropertyvalue(int index, const propertyitem* pi) {
 		if (pl) {
-			std::list<propertyitem*>::iterator it;
-			for (it = pl->l.begin(); it != pl->l.end(); ++it)
-			{
-				if ((*it)->name == pi->name)
-				{
-					delete (*it);
-					*it = pi->copy();
-				}
-			}
+			*(pl->l[index]->value) = *(pi->value);
 		}
 	}
 	node(UINT64 initborn) : kind(NODE_NONE), next{}, prev{}, p{ 0.0, 0.0 }, s{NODE_WIDTH, NODE_HEIGHT}, name{}, select(false), born(initborn), dead(UINT64_MAX), pl(0) {
@@ -459,8 +453,9 @@ class node_normal_1 :public node
 public:
 	node_normal_1(UINT64 initborn) : node(initborn) {
 		kind = NODE_NORMAL1;
+		pl->description = L"[入力値1]と[入力値2]を加算します。";
 		propertyitem* pi = new propertyitem;
-		pi->kind = PROPERTY_STRING;
+		pi->kind = PROPERTY_CHECK;
 		pi->setname(L"名前1");
 		pi->sethelp(L"名前");
 		pi->setdescription(L"名前");
@@ -830,7 +825,7 @@ public:
 	UINT64 maxgeneration;
 	graphic* g;
 	std::list<node*> selectnode;
-	int editkind;
+	LONG_PTR editkind;
 
 	node* GetFirstSelectObject() const {
 		return l.getfirstselectobject(generation);
@@ -850,7 +845,7 @@ public:
 		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_SHRINK, ZOOM_MIN < t.z);
 	}
 
-	bool beginedit(int kind = -1) {
+	bool beginedit(LONG_PTR kind = -1) {
 		if (kind == -1 || kind != editkind) {
 			if (generation < maxgeneration)
 			{
@@ -863,6 +858,7 @@ public:
 			}
 			generation = maxgeneration;
 			RefreshToolBar();
+			editkind = kind;
 			return true;
 		}
 		return false;
@@ -1246,12 +1242,14 @@ public:
 	static INT_PTR CALLBACK DialogProc(HWND hDlg, unsigned msg, WPARAM wParam, LPARAM lParam)
 	{
 		static NoCodeApp* pNoCodeApp;
+		static bool enable_edit_event;
 		switch (msg)
 		{
 		case  WM_CTLCOLORDLG:
 		case  WM_CTLCOLORSTATIC:
 			return (INT_PTR)((HBRUSH)GetStockObject(WHITE_BRUSH));
 		case WM_INITDIALOG:
+			enable_edit_event = false;
 			pNoCodeApp = (NoCodeApp*)lParam;
 			if (pNoCodeApp) {
 				RECT rect;
@@ -1259,25 +1257,81 @@ public:
 				MoveWindow(hDlg, 0, 0, rect.right, rect.bottom, 0);
 				node* n = pNoCodeApp->GetFirstSelectObject();
 				if (n && n->pl) {
-					int nYtop = 0;
+					CreateWindowEx(0, L"STATIC", n->pl->description.c_str(), WS_CHILD | WS_VISIBLE, 0, 0, POINT2PIXEL(256), POINT2PIXEL(64), hDlg, 0, GetModuleHandle(0), 0);
+					int nYtop = POINT2PIXEL(64);
+					LONG_PTR index = 0;
 					for (auto i : n->pl->l) {
 						switch (i->kind) {
-						case PROPERTY_STRING:
-							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name+L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT |SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
-							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, 0, GetModuleHandle(0), 0);
+						case PROPERTY_NONE:
+							break;
+						case PROPERTY_INT:
+							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
+							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 							CreateWindowEx(0, L"STATIC", (i->unit) ? (i->unit->c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, POINT2PIXEL(64 + 128 + 32), nYtop, POINT2PIXEL(32), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
+							break;
+						case PROPERTY_CHECK:
+							CreateWindowEx(0, L"BUTTON", (i->name) ? (i->name->c_str()) : 0, WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, POINT2PIXEL(8), nYtop, POINT2PIXEL(256)- POINT2PIXEL(8), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
+							if (i->value) {
+								if (i->value->_Equal(L"0")) {
+
+								}
+								else
+								{
+
+								}
+							}
+							break;
+						case PROPERTY_STRING:
+							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
+							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
+							CreateWindowEx(0, L"STATIC", (i->unit) ? (i->unit->c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, POINT2PIXEL(64 + 128 + 32), nYtop, POINT2PIXEL(32), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
+							break;
+						case PROPERTY_DATE:
+							break;
+						case PROPERTY_TIME:
+							break;
+						case PROPERTY_IP:
+							break;
+						case PROPERTY_PICTURE:
+							break;
+						case PROPERTY_COLOR:
+							break;
+						case PROPERTY_SELECT:
+							break;
+						case PROPERTY_CUSTOM:
 							break;
 						}
 						nYtop += POINT2PIXEL(32);
+						index++;
 					}
 				}
 			}
+			enable_edit_event = true;
 			EnumChildWindows(hDlg, EnumChildSetFontProc, 0);
 			//SetFocus(GetTopWindow(hDlg));
 			return TRUE;
 		case WM_COMMAND:
 			if (pNoCodeApp) {
-				if (HIWORD(wParam) == EN_UPDATE) {
+				if (enable_edit_event) {
+					if (HIWORD(wParam) == EN_UPDATE) {
+						node* n = pNoCodeApp->GetFirstSelectObject();
+						if (n)
+						{
+							if (n->pl) {
+								int nIndex = LOWORD(wParam) - 1000;
+								propertyitem* pi = n->pl->l[nIndex]->copy();
+								{
+									DWORD dwSize = GetWindowTextLength((HWND)lParam);
+									LPWSTR lpszText = (LPWSTR)GlobalAlloc(0, (dwSize + 1) * sizeof(WCHAR));
+									GetWindowText((HWND)lParam, lpszText, dwSize + 1);
+									*(pi->value) = lpszText;
+									GlobalFree(lpszText);
+								}
+								pNoCodeApp->UpdateSelectNode(nIndex, pi, (LONG_PTR)lParam); // とりあえずこの項目についてユニークな値が欲しい。
+								delete pi;
+							}
+						}
+					}
 				}
 			}
 			break;
@@ -1285,20 +1339,18 @@ public:
 		return FALSE;
 	}
 
-	void UpdateSelectNode(node* dstnode, int editkind = -1) {
-		if (dstnode && beginedit(editkind)) {
-			std::list<node*> selectnode;
-			l.selectlistup(&selectnode, generation);
-			for (auto i : selectnode) {
-				i->kill(generation);
-				node* newnode = new node(i, generation);
-				if (dstnode->pl) {
-					for (auto i : dstnode->pl->l) {
-						if (i->updated) {
-
-						}
-					}
-				}
+	void UpdateSelectNode(int index, const propertyitem* pi, LONG_PTR editkind = -1) {
+		bool firstedit = beginedit(editkind);
+		std::list<node*> selectnode;
+		l.selectlistup(&selectnode, generation);
+		for (auto i : selectnode) {
+			node* newnode = i;
+			if (firstedit) {
+				newnode->kill(generation);
+				newnode = new node(i, generation);
+			}
+			newnode->setpropertyvalue(index, pi);
+			if (firstedit) {
 				l.add(newnode);
 			}
 		}

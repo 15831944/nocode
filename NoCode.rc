@@ -51,8 +51,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,8
- PRODUCTVERSION 1,0,0,8
+ FILEVERSION 1,0,0,9
+ PRODUCTVERSION 1,0,0,9
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -69,12 +69,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "hack.jp"
             VALUE "FileDescription", "NoCode Editor"
-            VALUE "FileVersion", "1.0.0.8"
+            VALUE "FileVersion", "1.0.0.9"
             VALUE "InternalName", "NoCode.exe"
             VALUE "LegalCopyright", "Copyright (C) 2021"
             VALUE "OriginalFilename", "NoCode.exe"
             VALUE "ProductName", "NoCode"
-            VALUE "ProductVersion", "1.0.0.8"
+            VALUE "ProductVersion", "1.0.0.9"
         END
     END
     BLOCK "VarFileInfo"
@@ -206,7 +206,7 @@ IDD_PROPERTY_NONE DIALOGEX 0, 0, 310, 176
 STYLE DS_SETFONT | WS_CHILD | WS_VISIBLE
 FONT 20, "Yu Gothic UI", 400, 0, 0x80
 BEGIN
-    LTEXT           "未選択",IDC_STATIC,0,0,182,50
+    LTEXT           "ノードが選択されていません。",IDC_STATIC,4,2,182,50
 END
 
 
