@@ -10,6 +10,7 @@
 #include <list>
 #include <vector>
 #include <string>
+#include <regex>
 #include "util.h"
 #include <d2d1_3.h>
 #include <dwrite.h>
@@ -461,7 +462,6 @@ public:
 		pi->setdescription(L"名前");
 		pi->setvalue(L"1");
 		pi->setunit(L"個");
-		pi->setmatch(L"個");
 		pl->l.push_back(pi);
 	}
 };
@@ -480,7 +480,7 @@ public:
 			pi->setdescription(L"名前");
 			pi->setvalue(L"2");
 			pi->setunit(L"個");
-			pi->setmatch(L"個");
+			pi->setmatch(L"[+-]?\\d+");
 			pl->l.push_back(pi);
 		}
 	}
@@ -1245,8 +1245,8 @@ public:
 		static bool enable_edit_event;
 		switch (msg)
 		{
-		case  WM_CTLCOLORDLG:
-		case  WM_CTLCOLORSTATIC:
+		case WM_CTLCOLORDLG:
+		case WM_CTLCOLORSTATIC:
 			return (INT_PTR)((HBRUSH)GetStockObject(WHITE_BRUSH));
 		case WM_INITDIALOG:
 			enable_edit_event = false;
@@ -1266,11 +1266,11 @@ public:
 							break;
 						case PROPERTY_INT:
 							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
-							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
+							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 							CreateWindowEx(0, L"STATIC", (i->unit) ? (i->unit->c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, POINT2PIXEL(64 + 128 + 32), nYtop, POINT2PIXEL(32), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							break;
 						case PROPERTY_CHECK:
-							CreateWindowEx(0, L"BUTTON", (i->name) ? (i->name->c_str()) : 0, WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, POINT2PIXEL(8), nYtop, POINT2PIXEL(256)- POINT2PIXEL(8), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
+							CreateWindowEx(0, L"BUTTON", (i->name) ? (i->name->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, POINT2PIXEL(8), nYtop, POINT2PIXEL(256)- POINT2PIXEL(8), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							if (i->value) {
 								if (i->value->_Equal(L"0")) {
 
@@ -1283,7 +1283,7 @@ public:
 							break;
 						case PROPERTY_STRING:
 							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
-							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
+							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 							CreateWindowEx(0, L"STATIC", (i->unit) ? (i->unit->c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, POINT2PIXEL(64 + 128 + 32), nYtop, POINT2PIXEL(32), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							break;
 						case PROPERTY_DATE:
@@ -1308,30 +1308,37 @@ public:
 			}
 			enable_edit_event = true;
 			EnumChildWindows(hDlg, EnumChildSetFontProc, 0);
-			//SetFocus(GetTopWindow(hDlg));
 			return TRUE;
 		case WM_COMMAND:
 			if (pNoCodeApp) {
-				if (enable_edit_event) {
-					if (HIWORD(wParam) == EN_UPDATE) {
+				switch (HIWORD(wParam)) {
+				case EN_UPDATE:
+					if (enable_edit_event) {
 						node* n = pNoCodeApp->GetFirstSelectObject();
-						if (n)
-						{
-							if (n->pl) {
-								int nIndex = LOWORD(wParam) - 1000;
-								propertyitem* pi = n->pl->l[nIndex]->copy();
-								{
-									DWORD dwSize = GetWindowTextLength((HWND)lParam);
-									LPWSTR lpszText = (LPWSTR)GlobalAlloc(0, (dwSize + 1) * sizeof(WCHAR));
-									GetWindowText((HWND)lParam, lpszText, dwSize + 1);
+						if (n && n->pl) {
+							int nIndex = LOWORD(wParam) - 1000;
+							if (0 <= nIndex && nIndex < (int)n->pl->l.size()) {
+								DWORD dwSize = GetWindowTextLength((HWND)lParam);
+								LPWSTR lpszText = (LPWSTR)GlobalAlloc(0, (dwSize + 1) * sizeof(WCHAR));
+								GetWindowText((HWND)lParam, lpszText, dwSize + 1);
+								if (!n->pl->l[nIndex]->match || std::regex_match(lpszText, std::wregex(*n->pl->l[nIndex]->match))) {
+									propertyitem* pi = n->pl->l[nIndex]->copy();
 									*(pi->value) = lpszText;
-									GlobalFree(lpszText);
+									pNoCodeApp->UpdateSelectNode(nIndex, pi, (LONG_PTR)lParam); // とりあえずこの項目についてユニークな値が欲しい。
+									delete pi;
+								} else if (n->pl->l[nIndex]->help) {
+									EDITBALLOONTIP balloonTip = {};
+									balloonTip.cbStruct = sizeof(EDITBALLOONTIP);
+									balloonTip.pszText = n->pl->l[nIndex]->help->c_str();
+									balloonTip.pszTitle = L"入力エラー";
+									balloonTip.ttiIcon = TTI_ERROR;
+									Edit_ShowBalloonTip((HWND)lParam, &balloonTip);
 								}
-								pNoCodeApp->UpdateSelectNode(nIndex, pi, (LONG_PTR)lParam); // とりあえずこの項目についてユニークな値が欲しい。
-								delete pi;
+								GlobalFree(lpszText);
 							}
 						}
 					}
+					break;
 				}
 			}
 			break;
