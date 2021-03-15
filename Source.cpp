@@ -9,6 +9,7 @@
 #include <commctrl.h>
 #include <list>
 #include <vector>
+#include <map>
 #include <string>
 #include <regex>
 #include "util.h"
@@ -47,48 +48,6 @@ template<class Interface> inline void SafeRelease(Interface** ppInterfaceToRelea
 		(*ppInterfaceToRelease) = NULL;
 	}
 }
-
-INT_PTR CALLBACK DialogProc(HWND hDlg, unsigned msg, WPARAM wParam, LPARAM lParam)
-{
-	switch (msg)
-	{
-	case WM_INITDIALOG:
-		return TRUE;
-	case WM_ERASEBKGND:
-		return 1;
-	case WM_SIZE:
-		{
-			HWND hWnd = GetTopWindow(hDlg);
-			if (hWnd) {
-				MoveWindow(hWnd, 0, 0, LOWORD(lParam), HIWORD(lParam), 0);
-			}
-		}
-		break;
-	}
-	return FALSE;
-}
-
-class common {
-public:
-	HFONT hUIFont;
-	HWND hTool;
-	HWND hPropContainer;
-	UINT uDpiX = DEFAULT_DPI;
-	UINT uDpiY = DEFAULT_DPI;
-
-	common()
-	: hTool(0)
-	, hUIFont(0)
-	, uDpiX(DEFAULT_DPI)
-	, uDpiY(DEFAULT_DPI)
-	{
-		//CreateFont
-	}
-	~common() {
-	}
-};
-
-common g_c;
 
 class graphic {
 public:
@@ -161,6 +120,36 @@ public:
 		}
 	}
 };
+
+class common {
+public:
+	HFONT hUIFont;
+	HWND hTool;
+	HWND hPropContainer;
+	HWND hNodeBox;
+	HWND hMainWnd;
+	UINT uDpiX;
+	UINT uDpiY;
+	UINT dragMsg;
+	graphic* g;
+	common()
+		: hTool(0)
+		, hUIFont(0)
+		, hPropContainer(0)
+		, hNodeBox(0)
+		, hMainWnd(0)
+		, uDpiX(DEFAULT_DPI)
+		, uDpiY(DEFAULT_DPI)
+		, dragMsg(0)
+		, g(0)
+	{
+		//CreateFont
+	}
+	~common() {
+	}
+};
+
+common g_c;
 
 BOOL GetScaling(HWND hWnd, UINT* pnX, UINT* pnY)
 {
@@ -330,7 +319,11 @@ public:
 	}
 };
 
-enum NODE_KIND {
+enum OBJECT_KIND {
+	OBJECT_PRIMITIVE,
+	OBJECT_NODE,
+	OBJECT_ARROW,
+	OBJECT_COMMENT,
 	NODE_NONE,
 	NODE_NORMAL1,
 	NODE_NORMAL2,
@@ -342,49 +335,33 @@ enum NODE_KIND {
 	NODE_LOOP,
 	NODE_GOTO,
 	NODE_CUSTOM,
-
 	NODE_MULTI
+
 };
 
-class node {
-private:
-	bool select;
+class object {
 public:
-	WCHAR name[16];
-	NODE_KIND kind;
-	point p;
-	size s;
-	node* next;
-	node* prev;
+	OBJECT_KIND kind;
+	bool select;
 	UINT64 born;
 	UINT64 dead;
+	point p;
+	size s;
 	propertyitemlist* pl;
-	void setpropertyvalue(int index, const propertyitem* pi) {
-		if (pl) {
-			*(pl->l[index]->value) = *(pi->value);
-		}
-	}
-	node(UINT64 initborn) : kind(NODE_NONE), next{}, prev{}, p{ 0.0, 0.0 }, s{NODE_WIDTH, NODE_HEIGHT}, name{}, select(false), born(initborn), dead(UINT64_MAX), pl(0) {
+	object(UINT64 initborn) :select(false), born(initborn), dead(UINT64_MAX), kind(OBJECT_PRIMITIVE), p{}, s{}, pl(0)
+	{
 		pl = new propertyitemlist;
 	}
-	node(const node* src, UINT64 initborn) {
-		select = src->select;
-		lstrcpy(name, src->name);
-		kind = src->kind;
-		p = src->p;
-		s = src->s;
-		next = src->next;
-		prev = src->prev;
-		born = initborn;
-		dead = UINT64_MAX;
-		pl = src->pl->copy();
-	}
-	virtual ~node() {
+	virtual ~object() {
 		delete pl;
 	}
-	virtual node* copy(UINT64 generation) const {
-		node* newnode = new node(this, generation);
-		return newnode;
+	virtual bool isselect(UINT64 generation) {
+		return select && isalive(generation);
+	}
+	virtual void setselect(bool b, UINT64 generation) {
+		if (isalive(generation)) {
+			select = b;
+		}
 	}
 	virtual bool isalive(UINT64 generation) const {
 		return born <= generation && generation < dead;
@@ -393,6 +370,45 @@ public:
 		if (isalive(generation)) {
 			dead = generation;
 		}
+	}
+	virtual void paint(const graphic* g, const trans* t, UINT64 generation, const point* offset = nullptr) const = 0;
+	virtual bool hit(const point* p, UINT64 generation) const = 0;
+	virtual bool inrect(const point* p1, const point* p2, UINT64 generation) const = 0;
+	virtual object* copy(UINT64 generation) const = 0;
+	virtual void move(const point* pt) {
+		this->p.x += pt->y;
+		this->p.y += pt->y;
+	}
+	virtual void setpropertyvalue(int index, const propertyitem* pi) {
+		if (pl) {
+			*(pl->l[index]->value) = *(pi->value);
+		}
+	}
+};
+
+class node : public object {
+public:
+	WCHAR name[16];
+	node(UINT64 initborn) : object(initborn), name{} {
+		kind = NODE_NONE;
+		s = { NODE_WIDTH, NODE_HEIGHT };
+	}
+	node(const node* src, UINT64 initborn) : object(initborn) {
+		select = src->select;
+		lstrcpy(name, src->name);
+		kind = src->kind;
+		p = src->p;
+		s = src->s;
+		born = initborn;
+		dead = UINT64_MAX;
+		if (pl) delete pl;
+		pl = src->pl->copy();
+	}
+	virtual ~node() {
+	}
+	virtual node* copy(UINT64 generation) const {
+		node* newnode = new node(this, generation);
+		return newnode;
 	}
 	virtual void paint(const graphic* g, const trans* t, UINT64 generation, const point* offset = nullptr) const {
 		if (!isalive(generation)) return;
@@ -412,15 +428,36 @@ public:
 		rrect.rect = rect;
 		g->m_pRenderTarget->DrawRoundedRectangle(&rrect, select ? g->m_pSelectBrush : g->m_pNormalBrush);
 		g->m_pRenderTarget->DrawText(name, lstrlenW(name), g->m_pTextFormat, &rect, select ? g->m_pSelectBrush : g->m_pNormalBrush);
-		if (next) {
-			const point p1 = { p.x + (offset ? offset->x : 0.0), p.y + s.h / 2 + (offset ? offset->y : 0.0) };
-			const point p2 = { next->p.x + (offset ? offset->x : 0.0), next->p.y - next->s.h / 2 + (offset ? offset->y : 0.0) };
-			point p3, p4;
-			t->l2d(&p1, &p3);
-			t->l2d(&p2, &p4);
-			POINT p5 = { (int)p3.x, (int)p3.y }, p6 = { (int)p4.x, (int)p4.y };
-			//util::DrawArrow(hdc, &p5, &p6, &t->z);
-		}
+		//if (next && next->isalive(generation)) {
+		//	D2D1_POINT_2F c1 = {
+		//		(float)(p.x + (offset ? offset->x : 0.0)),
+		//		(float)(p.y + (offset ? offset->y : 0.0))
+		//	};
+		//	D2D1_POINT_2F c2 = {
+		//		(float)(next->p.x),
+		//		(float)(p.y + (offset ? offset->y : 0.0))
+		//	};
+		//	D2D1_POINT_2F c3 = {
+		//		(float)(p.x + (offset ? offset->x : 0.0)),
+		//		(float)(next->p.y)
+		//	};
+		//	D2D1_POINT_2F c4 = {
+		//		(float)(next->p.x),
+		//		(float)(next->p.y)
+		//	};
+		//	ID2D1PathGeometry* pPathGeometry;
+		//	g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
+		//	ID2D1GeometrySink* pSink;
+		//	pPathGeometry->Open(&pSink);
+		//	pSink->SetFillMode(D2D1_FILL_MODE_WINDING);
+		//	pSink->BeginFigure(c1, D2D1_FIGURE_BEGIN_FILLED);
+		//	pSink->AddBezier(D2D1::BezierSegment(c2, c3, c4));
+		//	pSink->EndFigure(D2D1_FIGURE_END_CLOSED);
+		//	pSink->Close();
+		//	SafeRelease(&pSink);
+		//	g->m_pRenderTarget->DrawGeometry(pPathGeometry, g->m_pNormalBrush, 1.0f);
+		//	SafeRelease(&pPathGeometry);
+		//}
 		g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 	}
 	virtual bool hit(const point* p, UINT64 generation) const {
@@ -439,13 +476,112 @@ public:
 			p.x + s.w / 2 <= p2->x &&
 			p.y + s.h / 2 <= p2->y;
 	}
-	virtual bool isselect(UINT64 generation) {
-		return select && isalive(generation);
+};
+
+class arrow : public object {
+public:
+	node* start;
+	node* end;
+
+	arrow(UINT64 initborn) : object(initborn), start(0), end(0) {}
+
+	arrow(const arrow* src, UINT64 initborn) : object(initborn) {
+		start = src->start;
+		end = src->end;
 	}
-	virtual void setselect(bool b, UINT64 generation) {
-		if (isalive(generation)) {
-			select = b;
+
+	virtual void paint(const graphic* g, const trans* t, UINT64 generation, const point* offset = nullptr) const override {
+		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)) {
+			g->m_pRenderTarget->SetTransform(
+				D2D1::Matrix3x2F::Translation((FLOAT)(t->c.w / 2 + t->p.x - t->l.x), (FLOAT)(t->c.h / 2 + t->p.y - t->l.y)) *
+				D2D1::Matrix3x2F::Scale((FLOAT)t->z, (FLOAT)t->z, D2D1::Point2F((FLOAT)(t->c.w / 2 + t->p.x), (FLOAT)(t->c.h / 2 + t->p.y)))
+			);
+			D2D1_POINT_2F c1 = {
+				(float)(start->p.x + (offset ? offset->x : 0.0)),
+				(float)(start->p.y + (offset ? offset->y : 0.0))
+			};
+			D2D1_POINT_2F c2 = {
+				(float)(end->p.x + (offset ? offset->y : 0.0)),
+				(float)(start->p.y + (offset ? offset->y : 0.0))
+			};
+			D2D1_POINT_2F c3 = {
+				(float)(start->p.x + (offset ? offset->x : 0.0)),
+				(float)(end->p.y + (offset ? offset->y : 0.0))
+			};
+			D2D1_POINT_2F c4 = {
+				(float)(end->p.x + (offset ? offset->y : 0.0)),
+				(float)(end->p.y + (offset ? offset->y : 0.0))
+			};
+			ID2D1PathGeometry* pPathGeometry;
+			g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
+			ID2D1GeometrySink* pSink;
+			pPathGeometry->Open(&pSink);
+			pSink->SetFillMode(D2D1_FILL_MODE_WINDING);
+			pSink->BeginFigure(c1, D2D1_FIGURE_BEGIN_FILLED);
+			pSink->AddBezier(D2D1::BezierSegment(c2, c3, c4));
+			pSink->EndFigure(D2D1_FIGURE_END_CLOSED);
+			pSink->Close();
+			SafeRelease(&pSink);
+			g->m_pRenderTarget->DrawGeometry(pPathGeometry, select ? g->m_pSelectBrush : g->m_pNormalBrush, 1.0f);
+			SafeRelease(&pPathGeometry);
+			g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 		}
+	}
+	virtual bool hit(const point* p, UINT64 generation) const override {
+		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)) {
+			D2D1_POINT_2F c1 = {
+				(float)(start->p.x),
+				(float)(start->p.y)
+			};
+			D2D1_POINT_2F c2 = {
+				(float)(end->p.x),
+				(float)(start->p.y)
+			};
+			D2D1_POINT_2F c3 = {
+				(float)(start->p.x),
+				(float)(end->p.y)
+			};
+			D2D1_POINT_2F c4 = {
+				(float)(end->p.x),
+				(float)(end->p.y)
+			};
+			ID2D1PathGeometry* pPathGeometry;
+			g_c.g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
+			ID2D1GeometrySink* pSink;
+			pPathGeometry->Open(&pSink);
+			pSink->SetFillMode(D2D1_FILL_MODE_WINDING);
+			pSink->BeginFigure(c1, D2D1_FIGURE_BEGIN_FILLED);
+			pSink->AddBezier(D2D1::BezierSegment(c2, c3, c4));
+			pSink->EndFigure(D2D1_FIGURE_END_CLOSED);
+			pSink->Close();
+			BOOL containsPoint = FALSE;
+			pPathGeometry->StrokeContainsPoint(
+				D2D1::Point2F((FLOAT)p->x, (FLOAT)p->y),
+				10,     // stroke width
+				NULL,   // stroke style
+				NULL,   // world transform
+				&containsPoint
+			);
+			SafeRelease(&pSink);
+			SafeRelease(&pPathGeometry);			
+			return (bool)containsPoint;
+		}
+		return false;
+	}
+	virtual bool inrect(const point* p1, const point* p2, UINT64 generation) const override {
+		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)) {
+			if (
+				p1->x <= min(start->p.x, end->p.x) && max(start->p.x, end->p.x) <= p2->x &&
+				p1->y <= min(start->p.y, end->p.y) && max(start->p.y, end->p.y) <= p2->y
+				) {
+				return true;
+			}
+		}
+		return false;
+	}
+	virtual arrow* copy(UINT64 generation) const {
+		arrow* n = new arrow(this, generation);
+		return n;
 	}
 };
 
@@ -526,11 +662,11 @@ public:
 	}
 };
 
-class nodelist {
+class objectlist {
 public:
-	std::list<node*> l;
-	nodelist() {}
-	void add(node* n) {
+	std::list<object*> l;
+	objectlist() {}
+	void add(object* n) {
 		l.push_back(n);
 	}
 	void clear() {
@@ -540,7 +676,7 @@ public:
 		l.clear();
 	}
 	void setbornanddead(UINT64 generation) {
-		for (std::list<node*>::iterator it = l.begin(); it != l.end(); ) {
+		for (std::list<object*>::iterator it = l.begin(); it != l.end(); ) {
 			if ((*it)->born > generation) {
 				delete (*it); // 未来に産まれる人たちは削除
 				it = l.erase(it);
@@ -571,7 +707,7 @@ public:
 			}
 		}
 	}
-	node* hit(const point* p, UINT64 generation, const node* without = nullptr) const {
+	object* hit(const point* p, UINT64 generation, const object* without = nullptr) const {
 		if (without) {
 			for (auto i : l) {
 				if (without != i && i->hit(p, generation))
@@ -585,7 +721,7 @@ public:
 		}
 		return 0;
 	}
-	void select(const node* n, UINT64 generation) { // 指定した一つのみ選択状態にする
+	void select(const object* n, UINT64 generation) { // 指定した一つのみ選択状態にする
 		for (auto i : l) {
 			i->setselect(i == n, generation);
 		}
@@ -595,7 +731,7 @@ public:
 			i->setselect(false, generation);
 		}
 	}
-	void rectselect(const point* p1, const point* p2, UINT64 generation, std::list<node*>* selectnode) {
+	void rectselect(const point* p1, const point* p2, UINT64 generation, std::list<object*>* selectnode) {
 		if (selectnode->size() == 0) {
 			for (auto i : l) {
 				i->setselect(i->inrect(p1, p2, generation), generation);
@@ -635,7 +771,7 @@ public:
 		}
 		return count;
 	}
-	bool isselect(const node* n, UINT64 generation) const {
+	bool isselect(const object* n, UINT64 generation) const {
 		for (auto i : l) {
 			if (i == n) {
 				return i->isselect(generation);
@@ -643,14 +779,14 @@ public:
 		}
 		return false;
 	}
-	void selectlistup(std::list<node*>* selectnode, UINT64 generation) const {
+	void selectlistup(std::list<object*>* selectnode, UINT64 generation) const {
 		for (auto i : l) {
 			if (i->isselect(generation)) {
 				selectnode->push_back(i);
 			}
 		}
 	}
-	node* getfirstselectobject(UINT64 generation) const {
+	object* getfirstselectobject(UINT64 generation) const {
 		for (auto i : l) {
 			if (i->isselect(generation)) {
 				return i;
@@ -659,11 +795,11 @@ public:
 		return 0;
 	}
 	void selectoffsetmerge(const point* dragoffset, UINT64 generation) {
-		std::list<node*> selectnode;
+		std::list<object*> selectnode;
 		selectlistup(&selectnode, generation);
 		for (auto i : selectnode) {
 			i->kill(generation);
-			node* newnode = new node(i, generation);
+			object* newnode = i->copy(generation);
 			newnode->p.x += dragoffset->x;
 			newnode->p.y += dragoffset->y;
 			l.push_back(newnode);
@@ -696,106 +832,44 @@ public:
 	}
 	void disconnectselectnode(UINT64 generation)
 	{
-		// まず繋げる
-		for (auto i : l) {
-			if (i->isselect(generation)) {
-			}
-			else {
-				if (i->next) {
-					if (i->next->isselect(generation)) {
-						node* next = i->next;
-						while (next) {
-							if (!next->isselect(generation))
-							{
-								i->next = next;
-								break;
-							}
-							next = next->next;
-						}
-					}
-				}
-				if (i->prev) {
-					if (i->prev->isselect(generation)) {
-						node* prev = i->prev;
-						while (prev) {
-							if (!prev->isselect(generation))
-							{
-								i->prev = prev;
-								break;
-							}
-							prev = prev->prev;
-						}
-					}
-				}
-				else {
-					normalization(i);
-				}
-			}
-		}
-		// 次に断ち切る
-		for (auto i : l) {
-			if (i->isselect(generation)) {
-				if (i->next) {
-					if (!i->next->isselect(generation)) {
-						i->next = nullptr;
-					}
-				}
-				if (i->prev) {
-					if (!i->prev->isselect(generation)) {
-						i->prev = nullptr;
-					}
-				}
-			} else {
-				if (i->next) {
-					if (i->next->isselect(generation)) {
-						i->next = nullptr;
-					}
-				}
-				if (i->prev) {
-					if (i->prev->isselect(generation)) {
-						i->prev = nullptr;
-					}
-				}
-			}
-		}
 	}
-	void insert(node *s, UINT64 generation) { // 指定したノードの下に選択したノードを入れ込む
-		if (s) {
-			point p1[] = {
-				{ s->p.x - s->s.w / 2,s->p.y - s->s.h / 2 },
-				{ s->p.x + s->s.w / 2,s->p.y - s->s.h / 2 },
-			};
-			node* prev = nullptr;
-			for (auto i : p1) {
-				prev = hit(&i, generation, s);
-				if (prev) {
-					break;
-				}
-			}
-			if (prev) {
-				if (prev->next) {
-					node* last = s;
-					while (last->next)
-						last = last->next;
-					prev->next->prev = last;
-					last->next = prev->next;
-				}
-				s->prev = prev;
-				prev->next = s;
-				normalization(prev);
-			}
-		}
+	void insert(object *s, UINT64 generation) { // 指定したノードの下に選択したノードを入れ込む
+		//if (s) {
+		//	point p1[] = {
+		//		{ s->p.x - s->s.w / 2,s->p.y - s->s.h / 2 },
+		//		{ s->p.x + s->s.w / 2,s->p.y - s->s.h / 2 },
+		//	};
+		//	node* prev = nullptr;
+		//	for (auto i : p1) {
+		//		prev = hit(&i, generation, s);
+		//		if (prev) {
+		//			break;
+		//		}
+		//	}
+		//	if (prev) {
+		//		if (prev->next) {
+		//			node* last = s;
+		//			while (last->next)
+		//				last = last->next;
+		//			prev->next->prev = last;
+		//			last->next = prev->next;
+		//		}
+		//		s->prev = prev;
+		//		prev->next = s;
+		//		normalization(prev);
+		//	}
+		//}
 	}
 	void normalization(node* n) {
-		node* prev = n;
-		if (!prev) return;
-		node* next = n->next;
-		while (next) {
-			next->p.x = prev->p.x;
-			next->p.y = prev->p.y + NODE_HEIGHT*2;
-			prev = next;
-			next = next->next;
-		}
+		//node* prev = n;
+		//if (!prev) return;
+		//node* next = n->next;
+		//while (next) {
+		//	next->p.x = prev->p.x;
+		//	next->p.y = prev->p.y + NODE_HEIGHT*2;
+		//	prev = next;
+		//	next = next->next;
+		//}
 	}
 };
 
@@ -807,35 +881,40 @@ enum Mode {
 	rdown = 4,
 };
 
+BOOL CALLBACK EnumChildSetFontProc(HWND hWnd, LPARAM lParam)
+{
+	SendMessage(hWnd, WM_SETFONT, (WPARAM)g_c.hUIFont, TRUE);
+	return TRUE;
+}
+
 class NoCodeApp {
 public:
 	trans t;
-	nodelist l;
+	objectlist nl;
 	Mode mode;
 	POINT dragstartP;
 	point dragstartL;
 	point dragoffset;
 	bool dragjudge;
 	bool modify;
-	node* dd; // ドラッグ中ノード
+	object* dd; // ドラッグ中ノード
 	HWND hWnd;
 	UINT uDpiX, uDpiY;
-	node* nn; // 新規作成ノード
+	object* nn; // 新規作成ノード
 	UINT64 generation;
 	UINT64 maxgeneration;
-	graphic* g;
-	std::list<node*> selectnode;
+	std::list<object*> selectnode;
 	LONG_PTR editkind;
 
-	node* GetFirstSelectObject() const {
-		return l.getfirstselectobject(generation);
+	object* GetFirstSelectObject() const {
+		return nl.getfirstselectobject(generation);
 	}
 
 	void RefreshToolBar() {
 
 		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_UNDO, CanUndo());
 		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_REDO, CanRedo());
-		bool selected = l.selectcount(generation) > 0;
+		bool selected = nl.selectcount(generation) > 0;
 		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_COPY, selected);
 		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_CUT, selected);
 		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_PASTE, selected);
@@ -849,7 +928,7 @@ public:
 		if (kind == -1 || kind != editkind) {
 			if (generation < maxgeneration)
 			{
-				l.setbornanddead(generation);
+				nl.setbornanddead(generation);
 				maxgeneration = generation + 1;
 			}
 			else
@@ -866,7 +945,7 @@ public:
 
 	NoCodeApp()
 		: t{}
-		, l{}
+		, nl{}
 		, mode(none)
 		, dragstartP{}
 		, dragstartL{}
@@ -880,7 +959,6 @@ public:
 		, nn(nullptr)
 		, generation(0)
 		, maxgeneration(0)
-		, g(nullptr)
 		, selectnode{}
 		, editkind(-1)
 	{
@@ -888,7 +966,7 @@ public:
 
 	void OnCreate(HWND hWnd) {
 		this->hWnd = hWnd;
-		g = new graphic(hWnd);
+		g_c.g = new graphic(hWnd);
 		OnProperty();
 		RefreshToolBar();
 	}
@@ -897,13 +975,13 @@ public:
 		point p1{ (double)x, (double)y };
 		point p2;
 		t.d2l(&p1, &p2);
-		dd = l.hit(&p2, generation);
+		dd = nl.hit(&p2, generation);
 		if (dd) {
 			if (GetKeyState(VK_CONTROL) < 0) {
-				dd->setselect(!l.isselect(dd, generation), generation); // Ctrlを押されているときは選択を追加
+				dd->setselect(!nl.isselect(dd, generation), generation); // Ctrlを押されているときは選択を追加
 			}
 			else if (!dd->isselect(generation)/*!l.isselect(dd, generation)*/){
-				l.select(dd, generation); // 選択されていないときは1つ選択する
+				nl.select(dd, generation); // 選択されていないときは1つ選択する
 			}
 			OnProperty();
 			dragstartP = { x, y };
@@ -913,10 +991,10 @@ public:
 		else {
 			//矩形選択モード
 			if (GetKeyState(VK_CONTROL) < 0) {
-				l.selectlistup(&selectnode, generation);
+				nl.selectlistup(&selectnode, generation);
 			}
 			else {
-				l.unselect(generation);
+				nl.unselect(generation);
 				OnProperty();
 			}
 			dragstartP = { x, y };
@@ -931,14 +1009,14 @@ public:
 			if (dragjudge) {
 				dragjudge = false;
 				beginedit();
-				l.selectoffsetmerge(&dragoffset, generation);
-				if (dd) l.insert(dd, generation);
+				nl.selectoffsetmerge(&dragoffset, generation);
+				if (dd) nl.insert(dd, generation);
 			}
 			else if (dd && dd->isselect(generation))
 			{
 				if (GetKeyState(VK_CONTROL) < 0) {} else
 				{
-					l.select(dd, generation);
+					nl.select(dd, generation);
 					OnProperty();
 				}
 			}
@@ -969,20 +1047,19 @@ public:
 		point p1{ (double)x, (double)y };
 		point p2;
 		t.d2l(&p1, &p2);
-		dd = l.hit(&p2, generation);
+		dd = nl.hit(&p2, generation);
 		if (dd) {
-			if (!l.isselect(dd, generation)) {
-				l.select(dd, generation); // 選択されていないときは1つ選択する
+			if (!nl.isselect(dd, generation)) {
+				nl.select(dd, generation); // 選択されていないときは1つ選択する
 				OnProperty();
 			}
 			dragstartP = { x, y };
 			dragstartL = p2;
 		}
 		else {
-			l.unselect(generation);
+			nl.unselect(generation);
 			OnProperty();
 		}
-
 		mode = rdown;
 		InvalidateRect(hWnd, NULL, FALSE);
 		SetCapture(hWnd);
@@ -991,22 +1068,56 @@ public:
 	void OnRButtonUp(int x, int y) {
 		ReleaseCapture();
 		if (mode == rdown) {
-			POINT point = { x, y };
-			ClientToScreen(hWnd, &point);
-			HMENU hMenu;
-			if (l.selectcount(generation) > 0) {
-				hMenu = LoadMenu(GetModuleHandle(0), MAKEINTRESOURCE(IDR_NODEPOPUP));
-			} else {
-				hMenu = LoadMenu(GetModuleHandle(0), MAKEINTRESOURCE(IDR_CLIENTPOPUP));
+
+			if (dragjudge) {
+				dragjudge = false;
+				beginedit();
+				point p1{ (double)x, (double)y };
+				point p2;
+				t.d2l(&p1, &p2);
+				object* dd2 = nl.hit(&p2, generation);
+				if (dd != dd2) {
+					beginedit();
+					nl.unselect(generation);
+					arrow* aa = new arrow(generation);
+					aa->start = (node*)dd;
+					aa->end = (node*)dd2;
+					aa->select = true;
+					nl.add(aa);
+					InvalidateRect(hWnd, NULL, FALSE);
+				}
 			}
-			HMENU hSubMenu = GetSubMenu(hMenu, 0);
-			TrackPopupMenu(hSubMenu, TPM_LEFTALIGN, point.x, point.y, 0, hWnd, NULL);
+			else
+			{
+				POINT point = { x, y };
+				ClientToScreen(hWnd, &point);
+				HMENU hMenu;
+				if (nl.selectcount(generation) > 0) {
+					hMenu = LoadMenu(GetModuleHandle(0), MAKEINTRESOURCE(IDR_NODEPOPUP));
+				}
+				else {
+					hMenu = LoadMenu(GetModuleHandle(0), MAKEINTRESOURCE(IDR_CLIENTPOPUP));
+				}
+				HMENU hSubMenu = GetSubMenu(hMenu, 0);
+				TrackPopupMenu(hSubMenu, TPM_LEFTALIGN, point.x, point.y, 0, hWnd, NULL);
+			}
 		}
 		mode = none;
 	}
 
 	void OnMouseMove(int x, int y) {
-		if (mode == dragclient) {
+		if (mode == rdown) {
+			point p1{ (double)x, (double)y };
+			point p2;
+			t.d2l(&p1, &p2);
+			dragoffset.x = p2.x - dragstartL.x;
+			dragoffset.y = p2.y - dragstartL.y;
+			if (abs(p1.x - dragstartP.x) >= DRAGJUDGEWIDTH || abs(p1.y - dragstartP.y) >= DRAGJUDGEWIDTH)
+			{
+				dragjudge = true;
+			}
+		}
+		else if (mode == dragclient) {
 			point p1{ (double)x, (double)y };
 			t.l.x = dragstartL.x - (p1.x - dragstartP.x) / t.z;
 			t.l.y = dragstartL.y - (p1.y - dragstartP.y) / t.z;
@@ -1021,7 +1132,7 @@ public:
 			if (abs(p1.x - dragstartP.x) >= DRAGJUDGEWIDTH || abs(p1.y - dragstartP.y) >= DRAGJUDGEWIDTH)
 			{
 				// ドラッグモードになった時は関係を断ち切る
-				l.disconnectselectnode(generation);
+				//l.disconnectselectnode(generation);
 				dragjudge = true;
 			}
 			RefreshToolBar();
@@ -1033,7 +1144,7 @@ public:
 			point p3, p4;
 			t.d2l(&p1, &p3);
 			t.d2l(&p2, &p4);
-			l.rectselect(&p3, &p4, generation, &selectnode);
+			nl.rectselect(&p3, &p4, generation, &selectnode);
 			OnProperty();
 			RefreshToolBar();
 			InvalidateRect(hWnd, NULL, FALSE);
@@ -1062,19 +1173,19 @@ public:
 	}
 
 	void OnDestroy() {
-		l.clear();
-		delete g;
-		g = nullptr;
+		nl.clear();
+		delete g_c.g;
+		g_c.g = nullptr;
 	}
 
 	void OnPaint() {
-		if (g) {
-			if (g->begindraw(hWnd)) {
-				g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
-				g->m_pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
-				l.paint(g, &t, generation, mode == dragnode ? &dragoffset : nullptr);
-				if (nn) nn->paint(g, &t, generation);
-				g->enddraw();
+		if (g_c.g) {
+			if (g_c.g->begindraw(hWnd)) {
+				g_c.g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
+				g_c.g->m_pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
+				nl.paint(g_c.g, &t, generation, mode == dragnode ? &dragoffset : nullptr);
+				if (nn) nn->paint(g_c.g, &t, generation);
+				g_c.g->enddraw();
 			}
 		}
 		ValidateRect(hWnd, NULL);
@@ -1085,12 +1196,12 @@ public:
 		t.p.y = y;
 		t.c.w = w;
 		t.c.h = h;
-		if (g && g->m_pRenderTarget)
+		if (g_c.g && g_c.g->m_pRenderTarget)
 		{
 			RECT rect;
 			GetClientRect(hWnd, &rect);
 			D2D1_SIZE_U size = { (UINT32)rect.right, (UINT32)rect.bottom };
-			g->m_pRenderTarget->Resize(size);
+			g_c.g->m_pRenderTarget->Resize(size);
 		}
 	}
 
@@ -1120,10 +1231,10 @@ public:
 	void OnDropped() {
 		if (nn) {
 			beginedit();
-			l.unselect(generation);
+			nl.unselect(generation);
 			nn->born = generation;
-			l.add(nn);
-			l.insert(nn, generation);
+			nl.add(nn);
+			nl.insert(nn, generation);
 			nn = nullptr;
 			OnProperty();
 			RefreshToolBar();
@@ -1133,7 +1244,7 @@ public:
 
 	void OnHome() {
 		point p1, p2;
-		l.allnodemargin(&p1, &p2, generation);
+		nl.allnodemargin(&p1, &p2, generation);
 		t.settransfromrect(&p1, &p2, POINT2PIXEL(10));
 		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
@@ -1141,22 +1252,22 @@ public:
 
 	void OnDelete() {
 		beginedit();
-		l.disconnectselectnode(generation);
-		l.del(generation);
+		//l.disconnectselectnode(generation);
+		nl.del(generation);
 		OnProperty();
 		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnUnselect() {
-		l.unselect(generation);
+		nl.unselect(generation);
 		OnProperty();
 		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
 	void OnAllselect() {
-		l.allselect(generation);
+		nl.allselect(generation);
 		OnProperty();
 		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
@@ -1170,7 +1281,7 @@ public:
 		// 初期化
 		generation = 0;
 		maxgeneration = 0;
-		l.clear();
+		nl.clear();
 		t.l = { 0.0, 0.0 };
 		t.z = 1.0;
 		OnProperty();
@@ -1233,29 +1344,20 @@ public:
 		InvalidateRect(hWnd, 0, 0);
 	}
 
-	static BOOL CALLBACK EnumChildSetFontProc(HWND hWnd, LPARAM lParam)
-	{
-		SendMessage(hWnd, WM_SETFONT, (WPARAM)g_c.hUIFont, TRUE);
-		return TRUE;
-	}
-
 	static INT_PTR CALLBACK DialogProc(HWND hDlg, unsigned msg, WPARAM wParam, LPARAM lParam)
 	{
 		static NoCodeApp* pNoCodeApp;
 		static bool enable_edit_event;
 		switch (msg)
 		{
-		case WM_CTLCOLORDLG:
-		case WM_CTLCOLORSTATIC:
-			return (INT_PTR)((HBRUSH)GetStockObject(WHITE_BRUSH));
 		case WM_INITDIALOG:
 			enable_edit_event = false;
 			pNoCodeApp = (NoCodeApp*)lParam;
 			if (pNoCodeApp) {
 				RECT rect;
 				GetClientRect(GetParent(hDlg), &rect);
-				MoveWindow(hDlg, 0, 0, rect.right, rect.bottom, 0);
-				node* n = pNoCodeApp->GetFirstSelectObject();
+				MoveWindow(hDlg, 0, 0, rect.right, rect.bottom, TRUE);
+				object* n = pNoCodeApp->GetFirstSelectObject();
 				if (n && n->pl) {
 					CreateWindowEx(0, L"STATIC", n->pl->description.c_str(), WS_CHILD | WS_VISIBLE, 0, 0, POINT2PIXEL(256), POINT2PIXEL(64), hDlg, 0, GetModuleHandle(0), 0);
 					int nYtop = POINT2PIXEL(64);
@@ -1266,7 +1368,7 @@ public:
 							break;
 						case PROPERTY_INT:
 							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
-							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
+							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_WANTRETURN, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 							CreateWindowEx(0, L"STATIC", (i->unit) ? (i->unit->c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, POINT2PIXEL(64 + 128 + 32), nYtop, POINT2PIXEL(32), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							break;
 						case PROPERTY_CHECK:
@@ -1283,7 +1385,7 @@ public:
 							break;
 						case PROPERTY_STRING:
 							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
-							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
+							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_WANTRETURN, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 							CreateWindowEx(0, L"STATIC", (i->unit) ? (i->unit->c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, POINT2PIXEL(64 + 128 + 32), nYtop, POINT2PIXEL(32), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							break;
 						case PROPERTY_DATE:
@@ -1314,7 +1416,7 @@ public:
 				switch (HIWORD(wParam)) {
 				case EN_UPDATE:
 					if (enable_edit_event) {
-						node* n = pNoCodeApp->GetFirstSelectObject();
+						object* n = pNoCodeApp->GetFirstSelectObject();
 						if (n && n->pl) {
 							int nIndex = LOWORD(wParam) - 1000;
 							if (0 <= nIndex && nIndex < (int)n->pl->l.size()) {
@@ -1348,17 +1450,17 @@ public:
 
 	void UpdateSelectNode(int index, const propertyitem* pi, LONG_PTR editkind = -1) {
 		bool firstedit = beginedit(editkind);
-		std::list<node*> selectnode;
-		l.selectlistup(&selectnode, generation);
+		std::list<object*> selectnode;
+		nl.selectlistup(&selectnode, generation);
 		for (auto i : selectnode) {
-			node* newnode = i;
+			object* newnode = i;
 			if (firstedit) {
 				newnode->kill(generation);
-				newnode = new node(i, generation);
+				newnode = i->copy(generation);
 			}
 			newnode->setpropertyvalue(index, pi);
 			if (firstedit) {
-				l.add(newnode);
+				nl.add(newnode);
 			}
 		}
 	}
@@ -1420,70 +1522,70 @@ public:
 		SetFocus(g_c.hPropContainer);
 	}
 
-	NODE_KIND GetSelectKind(node *n) const {
-		const int selcount = l.selectcount(generation);
+	OBJECT_KIND GetSelectKind(object *n) const {
+		const int selcount = nl.selectcount(generation);
 		if (selcount > 1)
 			return NODE_MULTI;
 		if (selcount == 0)
 			return NODE_NONE;
-		std::list<node*> selectnode;
-		l.selectlistup(&selectnode, generation);
+		std::list<object*> selectnode;
+		nl.selectlistup(&selectnode, generation);
 		for (auto i : selectnode) {
 			n = i;
 			return i->kind;
 		}
 		return NODE_NONE;
-		// ひと先ず上記の単一選択だけ
-		if (0) {
-			NODE_KIND nKind = NODE_NONE;
-			std::list<node*> selectnode;
-			l.selectlistup(&selectnode, generation);
-			for (auto i : selectnode) {
-				if (nKind != i->kind) {
-					if (nKind == NODE_NONE) {
-						nKind = i->kind;
-					}
-					else {
-						nKind = NODE_MULTI;
-						break;
-					}
-				}
-			}
-			return nKind;
-		}
 	}
 };
 
 LRESULT CALLBACK CBTProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	switch (nCode) {
-	case HCBT_ACTIVATE:
-	{
-		UnhookWindowsHookEx(g_hHook);
-		HWND hMes = (HWND)wParam;
-		HWND hWnd = GetParent(hMes);
-		RECT rectMessageBox, rectParentWindow;
-		GetWindowRect(hMes, &rectMessageBox);
-		GetWindowRect(hWnd, &rectParentWindow);
-		RECT rect = {
-			(rectParentWindow.right + rectParentWindow.left - rectMessageBox.right + rectMessageBox.left) / 2,
-			(rectParentWindow.bottom + rectParentWindow.top - rectMessageBox.bottom + rectMessageBox.top) / 2,
-			(rectParentWindow.right + rectParentWindow.left - rectMessageBox.right + rectMessageBox.left) / 2 + rectMessageBox.right - rectMessageBox.left,
-			(rectParentWindow.bottom + rectParentWindow.top - rectMessageBox.bottom + rectMessageBox.top) / 2 + rectMessageBox.bottom - rectMessageBox.top
-		};
-		util::ClipOrCenterRectToMonitor(&rect, MONITOR_CLIP | MONITOR_WORKAREA);
-		SetWindowPos(hMes, hWnd, rect.left, rect.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-	}
+		case HCBT_ACTIVATE:
+		{
+			UnhookWindowsHookEx(g_hHook);
+			HWND hMes = (HWND)wParam;
+			HWND hWnd = GetParent(hMes);
+			RECT rectMessageBox, rectParentWindow;
+			GetWindowRect(hMes, &rectMessageBox);
+			GetWindowRect(hWnd, &rectParentWindow);
+			RECT rect = {
+				(rectParentWindow.right + rectParentWindow.left - rectMessageBox.right + rectMessageBox.left) / 2,
+				(rectParentWindow.bottom + rectParentWindow.top - rectMessageBox.bottom + rectMessageBox.top) / 2,
+				(rectParentWindow.right + rectParentWindow.left - rectMessageBox.right + rectMessageBox.left) / 2 + rectMessageBox.right - rectMessageBox.left,
+				(rectParentWindow.bottom + rectParentWindow.top - rectMessageBox.bottom + rectMessageBox.top) / 2 + rectMessageBox.bottom - rectMessageBox.top
+			};
+			util::ClipOrCenterRectToMonitor(&rect, MONITOR_CLIP | MONITOR_WORKAREA);
+			SetWindowPos(hMes, hWnd, rect.left, rect.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+		}
+		break;
 	}
 	return 0;
 }
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK PropContainerDialogProc(HWND hDlg, unsigned msg, WPARAM wParam, LPARAM lParam)
 {
-	static UINT dragMsg;
-	static HWND hList;
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+		return TRUE;
+	case WM_SIZE:
+	{
+		HWND hWnd = GetTopWindow(hDlg);
+		if (hWnd) {
+			MoveWindow(hWnd, 0, 0, LOWORD(lParam), HIWORD(lParam), TRUE);
+		}
+	}
+	break;
+	}
+	return FALSE;
+}
+
+INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARAM lParam)
+{
 	static NoCodeApp* pNoCodeApp;
-	if (msg == dragMsg) {
+	static HWND hList;
+	if (msg == g_c.dragMsg) {
 		static int nDragItem;
 		LPDRAGLISTINFO lpdli = (LPDRAGLISTINFO)lParam;
 		switch (lpdli->uNotification) {
@@ -1500,14 +1602,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					}
 				}
 			}
+			SetDlgMsgResult(hWnd, g_c.dragMsg, TRUE);
 			return TRUE;
 		case DL_DRAGGING:
 			if (pNoCodeApp) {
 				POINT p = { lpdli->ptCursor.x, lpdli->ptCursor.y };
-				ScreenToClient(hWnd, &p);
+				ScreenToClient(g_c.hMainWnd, &p);
 				pNoCodeApp->OnDragging(p.x, p.y);
 			}
-			return 0;
+			break;
 		case DL_CANCELDRAG:
 			if (pNoCodeApp) {
 				pNoCodeApp->OnCancelDrag();
@@ -1515,9 +1618,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			break;
 		case DL_DROPPED:
 			if (pNoCodeApp) {
-				if (WindowFromPoint(lpdli->ptCursor) == hWnd) {
+				if (WindowFromPoint(lpdli->ptCursor) == g_c.hMainWnd) {
 					pNoCodeApp->OnDropped();
-				} else {
+				}
+				else {
 					pNoCodeApp->OnCancelDrag();
 				}
 			}
@@ -1527,11 +1631,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 	switch (msg)
 	{
-	case WM_CREATE:
-		dragMsg = RegisterWindowMessage(DRAGLISTMSGSTRING);
-		hList = CreateWindow(L"LISTBOX", 0, WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOINTEGRALHEIGHT, 0, 0, 0, 0, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
-		SendMessage(hWnd, WM_APP, 0, 0);
+	case WM_INITDIALOG:
+		pNoCodeApp = (NoCodeApp*)lParam;
+		hList = CreateWindow(L"LISTBOX", 0, WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOINTEGRALHEIGHT, 0, 0, 0, 0, hWnd, (HMENU) 100, GetModuleHandle(0), 0);
 		MakeDragList(hList);
+		g_c.dragMsg = RegisterWindowMessage(DRAGLISTMSGSTRING);
 		{
 			const int nIndex = (int)SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード1"));
 			if (nIndex != LB_ERR)
@@ -1564,6 +1668,42 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				SendMessage(hList, LB_SETITEMDATA, nIndex, (LPARAM)n);
 			}
 		}
+		EnumChildWindows(hWnd, EnumChildSetFontProc, 0);
+		return TRUE;
+	case WM_SIZE:
+		MoveWindow(hList, POINT2PIXEL(8), POINT2PIXEL(8), LOWORD(lParam) - POINT2PIXEL(16), HIWORD(lParam) - POINT2PIXEL(16), TRUE);
+		break;
+	case WM_DESTROY:
+		if (hList) {
+			int nIndexMax = (int)SendMessage(hList, LB_GETCOUNT, 0, 0);
+			for (int i = 0; i < nIndexMax; i++) {
+				node* n = (node*)SendMessage(hList, LB_GETITEMDATA, i, 0);
+				if (n) {
+					delete n;
+				}
+			}
+		}
+		break;
+	}
+	return FALSE;
+}
+
+LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	static NoCodeApp* pNoCodeApp;
+	switch (msg)
+	{
+	case WM_CREATE:
+		pNoCodeApp = new NoCodeApp();
+		if (pNoCodeApp) {
+			pNoCodeApp->OnCreate(hWnd);
+		}
+
+		SendMessage(hWnd, WM_APP, 0, 0);
+
+		//DialogBoxParam(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDD_NODEBOX), hWnd, NodeBoxDialogProc, (LPARAM)pNoCodeApp);
+		g_c.hNodeBox = CreateDialogParam(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDD_NODEBOX), hWnd, NodeBoxDialogProc, (LPARAM)pNoCodeApp);
+
 		{
 			TBBUTTON tbb[] = {
 				{0,ID_NEW,TBSTATE_ENABLED,TBSTYLE_BUTTON},
@@ -1588,22 +1728,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				{ 0 , 0 , TBSTATE_ENABLED , TBSTYLE_SEP , 0 , 0 , 0 } ,
 				{16,ID_HELP,TBSTATE_ENABLED,TBSTYLE_BUTTON},
 			};
-			g_c.hTool = CreateToolbarEx(hWnd, WS_CHILD | WS_VISIBLE, 0, _countof(tbb), ((LPCREATESTRUCT)lParam)->hInstance, IDR_TOOLBAR1, tbb, _countof(tbb), 0, 0, 64, 64, sizeof(TBBUTTON));
-			LONG_PTR lStyle = GetWindowLongPtr(g_c.hTool, GWL_STYLE);
-			lStyle = (lStyle | TBSTYLE_FLAT) & ~TBSTYLE_TRANSPARENT;
-			SetWindowLongPtr(g_c.hTool, GWL_STYLE, lStyle);
+			g_c.hTool = CreateToolbarEx(hWnd, WS_CHILD | WS_VISIBLE | WS_BORDER | TBSTYLE_FLAT, 0, _countof(tbb), ((LPCREATESTRUCT)lParam)->hInstance, IDR_TOOLBAR1, tbb, _countof(tbb), 0, 0, 64, 64, sizeof(TBBUTTON));
+			//LONG_PTR lStyle = GetWindowLongPtr(g_c.hTool, GWL_STYLE);
+			//lStyle = (lStyle | TBSTYLE_FLAT) & ~TBSTYLE_TRANSPARENT;
+			//SetWindowLongPtr(g_c.hTool, GWL_STYLE, lStyle);
 		}
-		g_c.hPropContainer = CreateDialog(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDD_PROPERTY), hWnd, DialogProc);
-		pNoCodeApp = new NoCodeApp();
-		if (pNoCodeApp) {
-			pNoCodeApp->OnCreate(hWnd);
-		}
+
+		g_c.hPropContainer = CreateDialog(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDD_PROPERTY), hWnd, PropContainerDialogProc);
+
 		break;
 	case WM_APP: // 画面DPIが変わった時、ウィンドウ作成時にフォントの生成を行う
 		GetScaling(hWnd, &g_c.uDpiX, &g_c.uDpiY);
 		DeleteObject(g_c.hUIFont);
 		g_c.hUIFont = CreateFontW(-POINT2PIXEL(FONT_SIZE), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
-		SendMessage(hList, WM_SETFONT, (WPARAM)g_c.hUIFont, 0);
 		break;
 	case WM_RBUTTONDOWN:
 		if (pNoCodeApp) {
@@ -1655,10 +1792,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			SendMessage(g_c.hTool, TB_AUTOSIZE, 0, 0);
 			RECT rect;
 			GetWindowRect(g_c.hTool, &rect);
-			MoveWindow(hList, 0, rect.bottom - rect.top, POINT2PIXEL(128), HIWORD(lParam) - (rect.bottom - rect.top), 1);
+			MoveWindow(g_c.hNodeBox, 0, rect.bottom - rect.top, POINT2PIXEL(256), HIWORD(lParam) - (rect.bottom - rect.top), 1);
 			MoveWindow(g_c.hPropContainer, LOWORD(lParam) - POINT2PIXEL(256), rect.bottom - rect.top, POINT2PIXEL(256), HIWORD(lParam) - (rect.bottom - rect.top), 1);
 			if (pNoCodeApp) {
-				pNoCodeApp->OnSize(POINT2PIXEL(128), rect.bottom - rect.top, LOWORD(lParam) - POINT2PIXEL(128) - POINT2PIXEL(256), HIWORD(lParam) - (rect.bottom - rect.top));
+				pNoCodeApp->OnSize(POINT2PIXEL(256), rect.bottom - rect.top, LOWORD(lParam) - POINT2PIXEL(256) - POINT2PIXEL(256), HIWORD(lParam) - (rect.bottom - rect.top));
 			}
 		}
 		break;
@@ -1749,15 +1886,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SendMessage(hWnd, WM_APP, 0, 0);
 		break;
 	case WM_DESTROY:
-		if (hList) {
-			int nIndexMax = (int)SendMessage(hList, LB_GETCOUNT, 0, 0);
-			for (int i = 0; i < nIndexMax; i++) {
-				node* n = (node*)SendMessage(hList, LB_GETITEMDATA, i, 0);
-				if (n) {
-					delete n;
-				}
-			}
-		}
 		if (pNoCodeApp) {
 			pNoCodeApp->OnDestroy();
 		}
@@ -1777,7 +1905,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 #if _DEBUG
 	_CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
 #endif
-
 	HeapSetInformation(0, HeapEnableTerminationOnCorruption, 0, 0);
 	if (FAILED(CoInitialize(0))) return 0;
 	MSG msg;
@@ -1794,7 +1921,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		szClassName
 	};
 	RegisterClass(&wndclass);
-	HWND hWnd = CreateWindowW(
+	g_c.hMainWnd = CreateWindowW(
 		szClassName,
 		L"NoCode Editor",
 		WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
@@ -1807,9 +1934,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		hInstance,
 		0
 	);
-
-	ShowWindow(hWnd, SW_SHOWDEFAULT);
-	UpdateWindow(hWnd);
+	ShowWindow(g_c.hMainWnd, SW_SHOWDEFAULT);
+	UpdateWindow(g_c.hMainWnd);
 	ACCEL Accel[] = {
 		{FVIRTKEY | FCONTROL, 'A', ID_ALLSELECT},
 		{FVIRTKEY, VK_ESCAPE, ID_UNSELECT},
@@ -1827,7 +1953,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 	HACCEL hAccel = CreateAcceleratorTable(Accel, _countof(Accel));
 	while (GetMessage(&msg, 0, 0, 0))
 	{
-		if (!TranslateAccelerator(hWnd, hAccel, &msg))
+		if (!TranslateAccelerator(g_c.hMainWnd, hAccel, &msg)/* && !IsDialogMessage(g_c.hMainWnd, &msg)*/)
 		{
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
@@ -1837,4 +1963,3 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 	CoUninitialize();
 	return (int)msg.wParam;
 }
-

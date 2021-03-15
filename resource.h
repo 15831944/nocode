@@ -12,6 +12,8 @@
 #define IDD_PROPERTY_NORMAL             107
 #define IDD_PROPERTY_MULTI              108
 #define IDD_PROPERTY_NONE               109
+#define IDD_NORD                        110
+#define IDD_NODEBOX                     110
 #define ID_40001                        40001
 #define ID_40002                        40002
 #define ID_40003                        40003
