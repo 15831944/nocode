@@ -1741,6 +1741,23 @@ INT_PTR CALLBACK OutputDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARAM
 	return FALSE;
 }
 
+INT_PTR CALLBACK AboutDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARAM lParam)
+{
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+		return TRUE;
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hWnd, LOWORD(wParam));
+			return TRUE;
+		}
+		break;
+	}
+	return FALSE;
+}
+
 INT_PTR CALLBACK VariableListDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARAM lParam)
 {
 	static NoCodeApp* pNoCodeApp;
@@ -2012,6 +2029,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					SetWindowText(hEdit, 0);
 				}
 			}
+			break;
+		case ID_ABOUT:
+			DialogBox(GetModuleHandle(0), MAKEINTRESOURCE(IDD_ABOUT), hWnd, AboutDialogProc);
 			break;
 		}
 		break;

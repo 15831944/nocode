@@ -51,8 +51,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,12
- PRODUCTVERSION 1,0,0,12
+ FILEVERSION 1,0,0,13
+ PRODUCTVERSION 1,0,0,13
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -69,12 +69,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "hack.jp"
             VALUE "FileDescription", "NoCode Editor"
-            VALUE "FileVersion", "1.0.0.12"
+            VALUE "FileVersion", "1.0.0.13"
             VALUE "InternalName", "NoCode.exe"
             VALUE "LegalCopyright", "Copyright (C) 2021"
             VALUE "OriginalFilename", "NoCode.exe"
             VALUE "ProductName", "NoCode"
-            VALUE "ProductVersion", "1.0.0.12"
+            VALUE "ProductVersion", "1.0.0.13"
         END
     END
     BLOCK "VarFileInfo"
@@ -233,6 +233,16 @@ FONT 20, "Yu Gothic UI", 400, 0, 0x80
 BEGIN
 END
 
+IDD_ABOUT DIALOGEX 128, 64, 363, 144
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "バージョン情報"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,307,125,50,14
+    CONTROL         IDB_BITMAP1,IDC_STATIC,"Static",SS_BITMAP,0,0,363,93
+    LTEXT           "バージョン情報",IDC_STATIC,11,100,42,8
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -271,6 +281,8 @@ END
 //
 
 IDR_TOOLBAR1            BITMAP                  "toolbar1.bmp"
+
+IDB_BITMAP1             BITMAP                  "elekiter.bmp"
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -312,6 +324,14 @@ BEGIN
     IDD_VARIABLE_LIST, DIALOG
     BEGIN
     END
+
+    IDD_ABOUT, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 356
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 137
+    END
 END
 #endif    // APSTUDIO_INVOKED
 
@@ -352,6 +372,11 @@ BEGIN
 END
 
 IDD_VARIABLE_LIST AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+IDD_ABOUT AFX_DIALOG_LAYOUT
 BEGIN
     0
 END

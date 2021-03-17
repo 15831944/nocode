@@ -15,6 +15,9 @@
 #define IDD_NODEBOX                     110
 #define IDD_OUTPUT                      111
 #define IDD_VARIABLE_LIST               112
+#define IDD_DIALOG1                     113
+#define IDD_ABOUT                       113
+#define IDB_BITMAP1                     114
 #define ID_40001                        40001
 #define ID_40002                        40002
 #define ID_40003                        40003
@@ -90,7 +93,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        110
+#define _APS_NEXT_RESOURCE_VALUE        116
 #define _APS_NEXT_COMMAND_VALUE         40095
 #define _APS_NEXT_CONTROL_VALUE         1010
 #define _APS_NEXT_SYMED_VALUE           101

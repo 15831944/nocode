@@ -169,6 +169,7 @@
     <ResourceCompile Include="NoCode.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="elekiter.bmp" />
     <Image Include="NoCode.ico" />
     <Image Include="toolbar1.bmp" />
   </ItemGroup>
