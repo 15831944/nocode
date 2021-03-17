@@ -128,6 +128,8 @@ public:
 	HWND hPropContainer;
 	HWND hNodeBox;
 	HWND hMainWnd;
+	HWND hOutput;
+	HWND hVariableList;
 	UINT uDpiX;
 	UINT uDpiY;
 	UINT dragMsg;
@@ -138,6 +140,8 @@ public:
 		, hPropContainer(0)
 		, hNodeBox(0)
 		, hMainWnd(0)
+		, hOutput(0)
+		, hVariableList(0)
 		, uDpiX(DEFAULT_DPI)
 		, uDpiY(DEFAULT_DPI)
 		, dragMsg(0)
@@ -237,7 +241,8 @@ enum PROPERTY_KIND {
 	PROPERTY_NONE,
 	PROPERTY_INT,
 	PROPERTY_CHECK,
-	PROPERTY_STRING,
+	PROPERTY_SINGLELINESTRING,
+	PROPERTY_MULTILINESTRING,
 	PROPERTY_DATE,
 	PROPERTY_TIME,
 	PROPERTY_IP,
@@ -257,7 +262,15 @@ public:
 	std::wstring* value;
 	std::wstring* unit;
 	std::wstring* match;
-	propertyitem() : kind(PROPERTY_NONE), required(false), name(0), help(0), description(0), value(0), unit(0), match(0){}
+	propertyitem() : kind(PROPERTY_NONE), required(false), name(0), help(0), description(0), value(0), unit(0), match(0) {}
+	propertyitem(const propertyitem* src) : kind(src->kind), required(src->required), name(0), help(0), description(0), value(0), unit(0), match(0) {
+		if (src->name) name = new std::wstring(*src->name);
+		if (src->help) help = new std::wstring(*src->help);
+		if (src->description) description = new std::wstring(*src->description);
+		if (src->value) value = new std::wstring(*src->value);
+		if (src->unit) unit = new std::wstring(*src->unit);
+		if (src->match) match = new std::wstring(*src->match);
+	}
 	~propertyitem() {
 		delete name;
 		delete help;
@@ -267,16 +280,7 @@ public:
 		delete match;
 	}
 	propertyitem* copy() const {
-		propertyitem* n = new propertyitem;
-		n->kind = kind;
-		n->required = required;
-		if (name) n->name = new std::wstring(*name);
-		if (help) n->help = new std::wstring(*help);
-		if (description) n->description = new std::wstring(*description);
-		if (value) n->value = new std::wstring(*value);
-		if (unit) n->unit = new std::wstring(*unit);
-		if (match) n->match = new std::wstring(*match);
-		return n;
+		return new propertyitem(this);
 	}
 	void setname(LPCWSTR lpszName) {
 		name = new std::wstring(lpszName);
@@ -325,10 +329,15 @@ enum OBJECT_KIND {
 	OBJECT_ARROW,
 	OBJECT_COMMENT,
 	NODE_NONE,
-	NODE_NORMAL1,
+	NODE_OUTPUT,
 	NODE_NORMAL2,
 	NODE_NORMAL3,
 	NODE_NORMAL4,
+	NODE_NORMAL5,
+	NODE_NORMAL6,
+	NODE_NORMAL7,
+	NODE_NORMAL8,
+	NODE_NORMAL9,
 	NODE_START,
 	NODE_END,
 	NODE_IF,
@@ -348,9 +357,12 @@ public:
 	point p;
 	size s;
 	propertyitemlist* pl;
-	object(UINT64 initborn) :select(false), born(initborn), dead(UINT64_MAX), kind(OBJECT_PRIMITIVE), p{}, s{}, pl(0)
+	object(UINT64 initborn) :kind(OBJECT_PRIMITIVE), select(false), born(initborn), dead(UINT64_MAX), p{}, s{}, pl(0)
 	{
 		pl = new propertyitemlist;
+	}
+	object(const object* src, UINT64 initborn) : kind(src->kind), select(src->select), born(initborn), dead(UINT64_MAX), p(src->p), s(src->s) {
+		pl = src->pl->copy();
 	}
 	virtual ~object() {
 		delete pl;
@@ -393,23 +405,12 @@ public:
 		kind = NODE_NONE;
 		s = { NODE_WIDTH, NODE_HEIGHT };
 	}
-	node(const node* src, UINT64 initborn) : object(initborn) {
-		select = src->select;
+	node(const node* src, UINT64 initborn) : object(src, initborn) {
 		lstrcpy(name, src->name);
-		kind = src->kind;
-		p = src->p;
-		s = src->s;
-		born = initborn;
-		dead = UINT64_MAX;
-		if (pl) delete pl;
-		pl = src->pl->copy();
 	}
 	virtual ~node() {
 	}
-	virtual node* copy(UINT64 generation) const {
-		node* newnode = new node(this, generation);
-		return newnode;
-	}
+	virtual node* copy(UINT64 generation) const = 0;
 	virtual void paint(const graphic* g, const trans* t, UINT64 generation, const point* offset = nullptr) const {
 		if (!isalive(generation)) return;
 		g->m_pRenderTarget->SetTransform(
@@ -476,6 +477,7 @@ public:
 			p.x + s.w / 2 <= p2->x &&
 			p.y + s.h / 2 <= p2->y;
 	}
+	virtual bool execute() const = 0;
 };
 
 class arrow : public object {
@@ -501,7 +503,7 @@ public:
 				(float)(start->p.y + (offset ? offset->y : 0.0))
 			};
 			D2D1_POINT_2F c2 = {
-				(float)(end->p.x + (offset ? offset->y : 0.0)),
+				(float)(end->p.x + (offset ? offset->x : 0.0)),
 				(float)(start->p.y + (offset ? offset->y : 0.0))
 			};
 			D2D1_POINT_2F c3 = {
@@ -509,7 +511,7 @@ public:
 				(float)(end->p.y + (offset ? offset->y : 0.0))
 			};
 			D2D1_POINT_2F c4 = {
-				(float)(end->p.x + (offset ? offset->y : 0.0)),
+				(float)(end->p.x + (offset ? offset->x : 0.0)),
 				(float)(end->p.y + (offset ? offset->y : 0.0))
 			};
 			ID2D1PathGeometry* pPathGeometry;
@@ -519,10 +521,10 @@ public:
 			pSink->SetFillMode(D2D1_FILL_MODE_WINDING);
 			pSink->BeginFigure(c1, D2D1_FIGURE_BEGIN_FILLED);
 			pSink->AddBezier(D2D1::BezierSegment(c2, c3, c4));
-			pSink->EndFigure(D2D1_FIGURE_END_CLOSED);
+			pSink->EndFigure(D2D1_FIGURE_END_OPEN);
 			pSink->Close();
 			SafeRelease(&pSink);
-			g->m_pRenderTarget->DrawGeometry(pPathGeometry, select ? g->m_pSelectBrush : g->m_pNormalBrush, 1.0f);
+			g->m_pRenderTarget->DrawGeometry(pPathGeometry, select ? g->m_pSelectBrush : g->m_pNormalBrush, 2.0f);
 			SafeRelease(&pPathGeometry);
 			g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 		}
@@ -552,12 +554,12 @@ public:
 			pSink->SetFillMode(D2D1_FILL_MODE_WINDING);
 			pSink->BeginFigure(c1, D2D1_FIGURE_BEGIN_FILLED);
 			pSink->AddBezier(D2D1::BezierSegment(c2, c3, c4));
-			pSink->EndFigure(D2D1_FIGURE_END_CLOSED);
+			pSink->EndFigure(D2D1_FIGURE_END_OPEN);
 			pSink->Close();
 			BOOL containsPoint = FALSE;
 			pPathGeometry->StrokeContainsPoint(
 				D2D1::Point2F((FLOAT)p->x, (FLOAT)p->y),
-				10,     // stroke width
+				16,     // stroke width
 				NULL,   // stroke style
 				NULL,   // world transform
 				&containsPoint
@@ -585,20 +587,39 @@ public:
 	}
 };
 
-class node_normal_1 :public node
+class node_output :public node
 {
 public:
-	node_normal_1(UINT64 initborn) : node(initborn) {
-		kind = NODE_NORMAL1;
-		pl->description = L"[入力値1]と[入力値2]を加算します。";
+	node_output(UINT64 initborn) : node(initborn) {
+		kind = NODE_OUTPUT;
+		lstrcpy(name, L"出力");
+		pl->description = L"入力値を[出力]に表示します。";
 		propertyitem* pi = new propertyitem;
-		pi->kind = PROPERTY_CHECK;
-		pi->setname(L"名前1");
-		pi->sethelp(L"名前");
-		pi->setdescription(L"名前");
-		pi->setvalue(L"1");
-		pi->setunit(L"個");
+		pi->kind = PROPERTY_MULTILINESTRING;
+		pi->setname(L"入力値");
+		pi->sethelp(L"テキストを入力してください。変数名を入力することも可能です。");
+		pi->setdescription(L"入力された文字列を「出力」に表示します。");
+		pi->setvalue(L"");
 		pl->l.push_back(pi);
+	}
+	node_output(const node_output* src, UINT64 initborn) : node(src, initborn) {}
+	virtual node* copy(UINT64 generation) const override {
+		node* newnode = new node_output(this, generation);
+		return newnode;
+	}
+	virtual bool execute() const override {
+		if (g_c.hOutput && IsWindow(g_c.hOutput)) {
+			HWND hEdit = GetTopWindow(g_c.hOutput);
+			if (hEdit && pl->l[0]->value && pl->l[0]->value->size() > 0) {
+				const int index = GetWindowTextLength(hEdit);
+				SendMessage(hEdit, EM_SETSEL, (WPARAM)index, (LPARAM)index);
+				SendMessage(hEdit, EM_REPLACESEL, 0, (LPARAM)pl->l[0]->value->c_str());
+				SendMessage(hEdit, EM_REPLACESEL, 0, (LPARAM)L"\r\n");
+				SendMessage(hEdit, EM_SCROLLCARET, 0, 0);
+				return true;
+			}
+		}
+		return false;
 	}
 };
 
@@ -610,7 +631,7 @@ public:
 		for (int i = 0; i < 2; i++)
 		{
 			propertyitem* pi = new propertyitem;
-			pi->kind = PROPERTY_STRING;
+			pi->kind = PROPERTY_SINGLELINESTRING;
 			pi->setname(L"名前2");
 			pi->sethelp(L"名前");
 			pi->setdescription(L"名前");
@@ -619,6 +640,15 @@ public:
 			pi->setmatch(L"[+-]?\\d+");
 			pl->l.push_back(pi);
 		}
+	}
+	node_normal_2(const node_normal_2* src, UINT64 initborn) : node(src, initborn) {
+	}
+	virtual node* copy(UINT64 generation) const override {
+		node* newnode = new node_normal_2(this, generation);
+		return newnode;
+	}
+	virtual bool execute() const override {
+		return true;
 	}
 };
 
@@ -630,7 +660,7 @@ public:
 		for (int i = 0; i < 3; i++)
 		{
 			propertyitem* pi = new propertyitem;
-			pi->kind = PROPERTY_STRING;
+			pi->kind = PROPERTY_SINGLELINESTRING;
 			pi->setname(L"名前3");
 			pi->sethelp(L"名前");
 			pi->setdescription(L"名前");
@@ -639,6 +669,15 @@ public:
 			pi->setmatch(L"個");
 			pl->l.push_back(pi);
 		}
+	}
+	node_normal_3(const node_normal_3* src, UINT64 initborn) : node(src, initborn) {
+	}
+	virtual node* copy(UINT64 generation) const override {
+		node* newnode = new node_normal_3(this, generation);
+		return newnode;
+	}
+	virtual bool execute() const override {
+		return true;
 	}
 };
 
@@ -650,7 +689,7 @@ public:
 		for (int i = 0; i < 4; i++)
 		{
 			propertyitem* pi = new propertyitem;
-			pi->kind = PROPERTY_STRING;
+			pi->kind = PROPERTY_SINGLELINESTRING;
 			pi->setname(L"名前4");
 			pi->sethelp(L"名前");
 			pi->setdescription(L"名前");
@@ -659,6 +698,15 @@ public:
 			pi->setmatch(L"個");
 			pl->l.push_back(pi);
 		}
+	}
+	node_normal_4(const node_normal_4* src, UINT64 initborn) : node(src, initborn) {
+	}
+	virtual node* copy(UINT64 generation) const override {
+		node* newnode = new node_normal_4(this, generation);
+		return newnode;
+	}
+	virtual bool execute() const override {
+		return true;
 	}
 };
 
@@ -691,20 +739,13 @@ public:
 		}
 	}
 	void paint(const graphic* g, trans* t, UINT64 generation, point* dragoffset = nullptr) {
-		if (dragoffset) {
-			for (auto i : l) {
-				if (!i->isselect(generation))
-					i->paint(g, t, generation);
-			}
-			for (auto i : l) {
-				if (i->isselect(generation))
-					i->paint(g, t, generation, dragoffset);
-			}
-		}
-		else {
-			for (auto i : l) {
+		for (auto i : l) {
+			if (!i->isselect(generation))
 				i->paint(g, t, generation);
-			}
+		}
+		for (auto i : l) {
+			if (i->isselect(generation))
+				i->paint(g, t, generation, dragoffset);
 		}
 	}
 	object* hit(const point* p, UINT64 generation, const object* without = nullptr) const {
@@ -1068,7 +1109,6 @@ public:
 	void OnRButtonUp(int x, int y) {
 		ReleaseCapture();
 		if (mode == rdown) {
-
 			if (dragjudge) {
 				dragjudge = false;
 				beginedit();
@@ -1086,6 +1126,7 @@ public:
 					nl.add(aa);
 					InvalidateRect(hWnd, NULL, FALSE);
 				}
+				dragoffset = { 0.0, 0.0 };
 			}
 			else
 			{
@@ -1344,6 +1385,15 @@ public:
 		InvalidateRect(hWnd, 0, 0);
 	}
 
+	void OnRun() {
+		if (nl.selectcount(generation) == 1){
+			object* first = nl.getfirstselectobject(generation);
+			if (first && NODE_NONE <= first->kind && first->kind <= NODE_MULTI) {
+				((node*)first)->execute();
+			}
+		}
+	}
+
 	static INT_PTR CALLBACK DialogProc(HWND hDlg, unsigned msg, WPARAM wParam, LPARAM lParam)
 	{
 		static NoCodeApp* pNoCodeApp;
@@ -1365,11 +1415,13 @@ public:
 					for (auto i : n->pl->l) {
 						switch (i->kind) {
 						case PROPERTY_NONE:
+							nYtop += POINT2PIXEL(32);
 							break;
 						case PROPERTY_INT:
 							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_WANTRETURN, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 							CreateWindowEx(0, L"STATIC", (i->unit) ? (i->unit->c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, POINT2PIXEL(64 + 128 + 32), nYtop, POINT2PIXEL(32), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
+							nYtop += POINT2PIXEL(32);
 							break;
 						case PROPERTY_CHECK:
 							CreateWindowEx(0, L"BUTTON", (i->name) ? (i->name->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, POINT2PIXEL(8), nYtop, POINT2PIXEL(256)- POINT2PIXEL(8), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
@@ -1382,28 +1434,41 @@ public:
 
 								}
 							}
+							nYtop += POINT2PIXEL(32);
 							break;
-						case PROPERTY_STRING:
+						case PROPERTY_SINGLELINESTRING:
 							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_WANTRETURN, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 							CreateWindowEx(0, L"STATIC", (i->unit) ? (i->unit->c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, POINT2PIXEL(64 + 128 + 32), nYtop, POINT2PIXEL(32), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
+							nYtop += POINT2PIXEL(32);
+							break;
+						case PROPERTY_MULTILINESTRING:
+							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
+							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_WANTRETURN, POINT2PIXEL(4), nYtop + POINT2PIXEL(28), POINT2PIXEL(256 - 8), POINT2PIXEL(28+256) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
+							nYtop += POINT2PIXEL(32+256+25);
 							break;
 						case PROPERTY_DATE:
+							nYtop += POINT2PIXEL(32);
 							break;
 						case PROPERTY_TIME:
+							nYtop += POINT2PIXEL(32);
 							break;
 						case PROPERTY_IP:
+							nYtop += POINT2PIXEL(32);
 							break;
 						case PROPERTY_PICTURE:
+							nYtop += POINT2PIXEL(32);
 							break;
 						case PROPERTY_COLOR:
+							nYtop += POINT2PIXEL(32);
 							break;
 						case PROPERTY_SELECT:
+							nYtop += POINT2PIXEL(32);
 							break;
 						case PROPERTY_CUSTOM:
+							nYtop += POINT2PIXEL(32);
 							break;
 						}
-						nYtop += POINT2PIXEL(32);
 						index++;
 					}
 				}
@@ -1471,52 +1536,19 @@ public:
 		node* n = 0;
 		switch (GetSelectKind(n)) {
 		case NODE_NONE:
-			//if (lstrcmpi(szTitle, L"NODE_NONE") != 0)
-			{
-				SetWindowText(g_c.hPropContainer, L"NODE_NONE");
-				DestroyWindow(GetTopWindow(g_c.hPropContainer));
-				CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NONE), g_c.hPropContainer, DialogProc, (LPARAM)0);
-			}
+			DestroyWindow(GetTopWindow(g_c.hPropContainer));
+			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NONE), g_c.hPropContainer, DialogProc, (LPARAM)0);
 			break;
-		case NODE_NORMAL1:
-			//if (lstrcmpi(szTitle, L"NODE_NORMAL") != 0)
-		{
-			SetWindowText(g_c.hPropContainer, L"NODE_NORMAL1");
-			DestroyWindow(GetTopWindow(g_c.hPropContainer));
-			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), g_c.hPropContainer, DialogProc, (LPARAM)this);
-		}
-		break;
+		case NODE_OUTPUT:
 		case NODE_NORMAL2:
-			//if (lstrcmpi(szTitle, L"NODE_NORMAL") != 0)
-		{
-			SetWindowText(g_c.hPropContainer, L"NODE_NORMAL2");
-			DestroyWindow(GetTopWindow(g_c.hPropContainer));
-			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), g_c.hPropContainer, DialogProc, (LPARAM)this);
-		}
-		break;
 		case NODE_NORMAL3:
-			//if (lstrcmpi(szTitle, L"NODE_NORMAL") != 0)
-		{
-			SetWindowText(g_c.hPropContainer, L"NODE_NORMAL3");
-			DestroyWindow(GetTopWindow(g_c.hPropContainer));
-			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), g_c.hPropContainer, DialogProc, (LPARAM)this);
-		}
-		break;
 		case NODE_NORMAL4:
-			//if (lstrcmpi(szTitle, L"NODE_NORMAL") != 0)
-		{
-			SetWindowText(g_c.hPropContainer, L"NODE_NORMAL4");
 			DestroyWindow(GetTopWindow(g_c.hPropContainer));
 			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), g_c.hPropContainer, DialogProc, (LPARAM)this);
-		}
-		break;
+			break;
 		case NODE_MULTI:
-			//if (lstrcmpi(szTitle, L"NODE_MULTI") != 0)
-			{
-				SetWindowText(g_c.hPropContainer, L"NODE_MULTI");
-				DestroyWindow(GetTopWindow(g_c.hPropContainer));
-				CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_MULTI), g_c.hPropContainer, DialogProc, (LPARAM)0);
-			}
+			DestroyWindow(GetTopWindow(g_c.hPropContainer));
+			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_MULTI), g_c.hPropContainer, DialogProc, (LPARAM)0);
 			break;
 		}
 		SetFocus(g_c.hPropContainer);
@@ -1594,7 +1626,7 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 			if (nDragItem != -1) {
 				node* n = (node*)SendMessage(lpdli->hWnd, LB_GETITEMDATA, nDragItem, 0);
 				if (n) {
-					node* nn = new node(n, 0);
+					node* nn = n->copy(0);
 					nn->setselect(true, 0);
 					SendMessage(lpdli->hWnd, LB_GETTEXT, nDragItem, (LPARAM)nn->name);
 					if (pNoCodeApp) {
@@ -1633,15 +1665,17 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 	{
 	case WM_INITDIALOG:
 		pNoCodeApp = (NoCodeApp*)lParam;
-		hList = CreateWindow(L"LISTBOX", 0, WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOINTEGRALHEIGHT, 0, 0, 0, 0, hWnd, (HMENU) 100, GetModuleHandle(0), 0);
+		hList = CreateWindow(L"LISTBOX", 0, WS_CHILD | WS_VISIBLE | WS_BORDER | LBS_NOINTEGRALHEIGHT, 0, 0, 0, 0, hWnd, 0, GetModuleHandle(0), 0);
 		MakeDragList(hList);
 		g_c.dragMsg = RegisterWindowMessage(DRAGLISTMSGSTRING);
 		{
-			const int nIndex = (int)SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)TEXT("ノード1"));
-			if (nIndex != LB_ERR)
-			{
-				node* n = new node_normal_1(0);
-				SendMessage(hList, LB_SETITEMDATA, nIndex, (LPARAM)n);
+			node* n = new node_output(0);
+			if (n) {
+				const int nIndex = (int)SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)n->name);
+				if (nIndex != LB_ERR)
+				{
+					SendMessage(hList, LB_SETITEMDATA, nIndex, (LPARAM)n);
+				}
 			}
 		}
 		{
@@ -1671,7 +1705,7 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 		EnumChildWindows(hWnd, EnumChildSetFontProc, 0);
 		return TRUE;
 	case WM_SIZE:
-		MoveWindow(hList, POINT2PIXEL(8), POINT2PIXEL(8), LOWORD(lParam) - POINT2PIXEL(16), HIWORD(lParam) - POINT2PIXEL(16), TRUE);
+		MoveWindow(hList, POINT2PIXEL(4), POINT2PIXEL(4), LOWORD(lParam) - POINT2PIXEL(8), HIWORD(lParam) - POINT2PIXEL(8), TRUE);
 		break;
 	case WM_DESTROY:
 		if (hList) {
@@ -1688,21 +1722,125 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 	return FALSE;
 }
 
+INT_PTR CALLBACK OutputDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARAM lParam)
+{
+	static NoCodeApp* pNoCodeApp;
+	static HWND hEdit;
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+		pNoCodeApp = (NoCodeApp*)lParam;
+		hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", 0, WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_READONLY, 0, 0, 0, 0, hWnd, 0, GetModuleHandle(0), 0);
+		SendMessage(hEdit, EM_LIMITTEXT, 0, 0);
+		EnumChildWindows(hWnd, EnumChildSetFontProc, 0);
+		return TRUE;
+	case WM_SIZE:
+		MoveWindow(hEdit, POINT2PIXEL(4), POINT2PIXEL(4), LOWORD(lParam) - POINT2PIXEL(8), HIWORD(lParam) - POINT2PIXEL(8), TRUE);
+		break;
+	}
+	return FALSE;
+}
+
+INT_PTR CALLBACK VariableListDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARAM lParam)
+{
+	static NoCodeApp* pNoCodeApp;
+	static HWND hList;
+	static HWND hEdit;
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+		pNoCodeApp = (NoCodeApp*)lParam;
+		{
+			hList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, 0, WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_EDITLABELS, 0, 0, 0, 0, hWnd, (HMENU)1000, GetModuleHandle(0), NULL);
+			LV_COLUMN lvcol;
+			LV_ITEM item;
+			lvcol.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
+			lvcol.fmt = LVCFMT_LEFT;
+			lvcol.cx = 128;
+			lvcol.pszText = TEXT("変数名");
+			lvcol.iSubItem = 0;
+			SendMessage(hList, LVM_INSERTCOLUMN, 0, (LPARAM)&lvcol);
+			lvcol.fmt = LVCFMT_LEFT;
+			lvcol.cx = 128;
+			lvcol.pszText = TEXT("値");
+			lvcol.iSubItem = 1;
+			SendMessage(hList, LVM_INSERTCOLUMN, 1, (LPARAM)&lvcol);
+			item.mask = LVIF_TEXT;
+			{
+				TCHAR szText[50];
+				for (int i = 0; i < 128; i++)
+				{
+					wsprintf(szText, TEXT("アイテム %d"), i);
+					item.pszText = szText;
+					item.iItem = i;
+					item.iSubItem = 0;
+					item.iImage = i % 4;
+					SendMessage(hList, LVM_INSERTITEM, 0, (LPARAM)&item);
+					wsprintf(szText, TEXT("%d"), i);
+					item.pszText = szText;
+					item.iItem = i;
+					item.iSubItem = 1;
+					SendMessage(hList, LVM_SETITEM, 0, (LPARAM)&item);
+				}
+			}
+			ListView_SetExtendedListViewStyle(hList, LVS_EX_TWOCLICKACTIVATE);
+		}
+		EnumChildWindows(hWnd, EnumChildSetFontProc, 0);
+		return TRUE;
+	case WM_NOTIFY:
+		if (LOWORD(wParam) == 1000)
+		{
+			switch (((LV_DISPINFO*)lParam)->hdr.code)
+			{
+			case LVN_KEYDOWN:
+				if (((NMLVKEYDOWN*)lParam)->wVKey == VK_F2)
+				{
+					ListView_EditLabel(hList, ListView_GetNextItem(hList, -1, LVNI_FOCUSED));
+				}
+				break;
+			case LVN_ITEMACTIVATE:
+				ListView_EditLabel(hList, ListView_GetNextItem(hList, -1, LVNI_FOCUSED));
+				break;
+			case LVN_BEGINLABELEDIT:    //アイテム編集を開始
+				hEdit = ListView_GetEditControl(hList);
+				break;
+			case LVN_ENDLABELEDIT:
+				{
+					int nTextLength = GetWindowTextLength(hEdit);
+					if (nTextLength) {
+						LPWSTR lpszText = (LPWSTR)GlobalAlloc(0, sizeof(WCHAR) * (nTextLength + 1));
+						GetWindowText(hEdit, lpszText, nTextLength + 1);
+						ListView_SetItemText(hList, ((LV_DISPINFO*)lParam)->item.iItem, 0, lpszText);
+						GlobalFree(lpszText);
+					}
+				}
+				break;
+			}
+		}
+		break;
+	case WM_SIZE:
+		MoveWindow(hList, POINT2PIXEL(4), POINT2PIXEL(4), LOWORD(lParam) - POINT2PIXEL(8), HIWORD(lParam) - POINT2PIXEL(8), TRUE);
+		break;
+	}
+	return FALSE;
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	static NoCodeApp* pNoCodeApp;
 	switch (msg)
 	{
 	case WM_CREATE:
+		InitCommonControls();
 		pNoCodeApp = new NoCodeApp();
 		if (pNoCodeApp) {
 			pNoCodeApp->OnCreate(hWnd);
 		}
-
 		SendMessage(hWnd, WM_APP, 0, 0);
 
-		//DialogBoxParam(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDD_NODEBOX), hWnd, NodeBoxDialogProc, (LPARAM)pNoCodeApp);
 		g_c.hNodeBox = CreateDialogParam(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDD_NODEBOX), hWnd, NodeBoxDialogProc, (LPARAM)pNoCodeApp);
+		g_c.hOutput = CreateDialogParam(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDD_OUTPUT), hWnd, OutputDialogProc, (LPARAM)pNoCodeApp);
+		g_c.hVariableList = CreateDialogParam(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDD_VARIABLE_LIST), hWnd, VariableListDialogProc, (LPARAM)pNoCodeApp);
 
 		{
 			TBBUTTON tbb[] = {
@@ -1793,9 +1931,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			RECT rect;
 			GetWindowRect(g_c.hTool, &rect);
 			MoveWindow(g_c.hNodeBox, 0, rect.bottom - rect.top, POINT2PIXEL(256), HIWORD(lParam) - (rect.bottom - rect.top), 1);
+			MoveWindow(g_c.hOutput, POINT2PIXEL(256), HIWORD(lParam) - POINT2PIXEL(96), LOWORD(lParam) - POINT2PIXEL(256) - POINT2PIXEL(256) - POINT2PIXEL(200), POINT2PIXEL(96), 1);
 			MoveWindow(g_c.hPropContainer, LOWORD(lParam) - POINT2PIXEL(256), rect.bottom - rect.top, POINT2PIXEL(256), HIWORD(lParam) - (rect.bottom - rect.top), 1);
+			MoveWindow(g_c.hVariableList, LOWORD(lParam) - POINT2PIXEL(256)- POINT2PIXEL(200), rect.bottom - rect.top, POINT2PIXEL(200), HIWORD(lParam) - (rect.bottom - rect.top), 1);
 			if (pNoCodeApp) {
-				pNoCodeApp->OnSize(POINT2PIXEL(256), rect.bottom - rect.top, LOWORD(lParam) - POINT2PIXEL(256) - POINT2PIXEL(256), HIWORD(lParam) - (rect.bottom - rect.top));
+				pNoCodeApp->OnSize(POINT2PIXEL(256), rect.bottom - rect.top, LOWORD(lParam) - POINT2PIXEL(256) - POINT2PIXEL(256) - POINT2PIXEL(200), HIWORD(lParam) - (rect.bottom - rect.top) - POINT2PIXEL(96));
 			}
 		}
 		break;
@@ -1858,6 +1998,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case ID_PROPERTY:
 			if (pNoCodeApp) {
 				pNoCodeApp->OnProperty();
+			}
+			break;
+		case ID_RUN:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnRun();
+			}
+			break;
+		case ID_OUTPUT_CLEAR:
+			if (g_c.hOutput) {
+				HWND hEdit = GetTopWindow(g_c.hOutput);
+				if (hEdit) {
+					SetWindowText(hEdit, 0);
+				}
 			}
 			break;
 		}

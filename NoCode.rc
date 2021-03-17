@@ -51,8 +51,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,11
- PRODUCTVERSION 1,0,0,11
+ FILEVERSION 1,0,0,12
+ PRODUCTVERSION 1,0,0,12
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -69,12 +69,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "hack.jp"
             VALUE "FileDescription", "NoCode Editor"
-            VALUE "FileVersion", "1.0.0.11"
+            VALUE "FileVersion", "1.0.0.12"
             VALUE "InternalName", "NoCode.exe"
             VALUE "LegalCopyright", "Copyright (C) 2021"
             VALUE "OriginalFilename", "NoCode.exe"
             VALUE "ProductName", "NoCode"
-            VALUE "ProductVersion", "1.0.0.11"
+            VALUE "ProductVersion", "1.0.0.12"
         END
     END
     BLOCK "VarFileInfo"
@@ -123,6 +123,8 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "すべて選択(&A)\tCtrl+A",           ID_ALLSELECT
         MENUITEM "選択解除(&N)\tEsc",               ID_UNSELECT
+        MENUITEM SEPARATOR
+        MENUITEM "出力をクリア(&L)",                  40094
     END
     POPUP "表示(&V)"
     BEGIN
@@ -133,7 +135,6 @@ BEGIN
         MENUITEM "拡大(&Z)\tCtrl++",              ID_ZOOM
         MENUITEM "縮小(&S)\tCtrl+-",              ID_SHRINK
         MENUITEM "画面内に収める(&H)\tHome",           ID_HOME
-        MENUITEM SEPARATOR
     END
     POPUP "実行(&R)"
     BEGIN
@@ -163,9 +164,11 @@ BEGIN
         MENUITEM "切り取り(&X)\tCtrl+X",            0
         MENUITEM "削除(&D)\tDel",                 ID_DELETE
         MENUITEM SEPARATOR
+        MENUITEM "実行(&R)",                      ID_RUN
+        MENUITEM SEPARATOR
         MENUITEM "お気に入りに登録(&F)\tCtrl+F",        0
         MENUITEM SEPARATOR
-        MENUITEM "プロパティ(&P)\tAlt+Enter",        0
+        MENUITEM "プロパティ(&P)\tAlt+Enter",        ID_POPUP_40093
     END
 END
 
@@ -210,6 +213,20 @@ BEGIN
 END
 
 IDD_NODEBOX DIALOGEX 0, 0, 5, 5
+STYLE DS_SETFONT | WS_CHILD | WS_VISIBLE | WS_BORDER
+EXSTYLE WS_EX_TOOLWINDOW
+FONT 20, "Yu Gothic UI", 400, 0, 0x80
+BEGIN
+END
+
+IDD_OUTPUT DIALOGEX 0, 0, 5, 5
+STYLE DS_SETFONT | WS_CHILD | WS_VISIBLE | WS_BORDER
+EXSTYLE WS_EX_TOOLWINDOW
+FONT 20, "Yu Gothic UI", 400, 0, 0x80
+BEGIN
+END
+
+IDD_VARIABLE_LIST DIALOGEX 0, 0, 5, 5
 STYLE DS_SETFONT | WS_CHILD | WS_VISIBLE | WS_BORDER
 EXSTYLE WS_EX_TOOLWINDOW
 FONT 20, "Yu Gothic UI", 400, 0, 0x80
@@ -287,6 +304,14 @@ BEGIN
     IDD_NODEBOX, DIALOG
     BEGIN
     END
+
+    IDD_OUTPUT, DIALOG
+    BEGIN
+    END
+
+    IDD_VARIABLE_LIST, DIALOG
+    BEGIN
+    END
 END
 #endif    // APSTUDIO_INVOKED
 
@@ -317,6 +342,16 @@ BEGIN
 END
 
 IDD_NODEBOX AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+IDD_OUTPUT AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+IDD_VARIABLE_LIST AFX_DIALOG_LAYOUT
 BEGIN
     0
 END

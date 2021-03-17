@@ -12,8 +12,9 @@
 #define IDD_PROPERTY_NORMAL             107
 #define IDD_PROPERTY_MULTI              108
 #define IDD_PROPERTY_NONE               109
-#define IDD_NORD                        110
 #define IDD_NODEBOX                     110
+#define IDD_OUTPUT                      111
+#define IDD_VARIABLE_LIST               112
 #define ID_40001                        40001
 #define ID_40002                        40002
 #define ID_40003                        40003
@@ -81,13 +82,16 @@
 #define ID_POPUP_40065                  40065
 #define ID_SUSPEND                      40076
 #define ID_STOP                         40077
+#define ID_POPUP_40092                  40092
+#define ID_POPUP_40093                  40093
+#define ID_OUTPUT_CLEAR                 40094
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        110
-#define _APS_NEXT_COMMAND_VALUE         40092
+#define _APS_NEXT_COMMAND_VALUE         40095
 #define _APS_NEXT_CONTROL_VALUE         1010
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
