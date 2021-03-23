@@ -30,7 +30,7 @@
 #define SCALEY(Y) MulDiv(Y, uDpiY, DEFAULT_DPI)
 #define POINT2PIXEL(PT) MulDiv(PT, g_c.uDpiY, 72)
 #define DRAGJUDGEWIDTH POINT2PIXEL(4)
-#define FONT_NAME L"Yu Gothic UI"
+#define FONT_NAME L"Consolas"
 #define FONT_SIZE 14
 #define NODE_WIDTH 200
 #define NODE_HEIGHT 100
@@ -38,7 +38,7 @@
 #define ZOOM_MIN 0.5
 #define ZOOM_STEP 1.20
 
-WCHAR szClassName[] = L"NoCode Editor";
+WCHAR szClassName[] = L"Elekiter";
 HHOOK g_hHook;
 WNDPROC DefaultRichEditProc;
 LRESULT CALLBACK RichEditProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -74,14 +74,13 @@ public:
 		, m_pNormalBkBrush(0)
 		, m_pSelectBkBrush(0)
 	{
-		static const WCHAR msc_fontName[] = L"Verdana";
 		static const FLOAT msc_fontSize = 25;
 
 		HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &m_pD2DFactory);
 		if (SUCCEEDED(hr))
 			hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(m_pDWriteFactory), reinterpret_cast<IUnknown**>(&m_pDWriteFactory));
 		if (SUCCEEDED(hr))
-			hr = m_pDWriteFactory->CreateTextFormat(msc_fontName, 0, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, msc_fontSize, L"", &m_pTextFormat);
+			hr = m_pDWriteFactory->CreateTextFormat(FONT_NAME, 0, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, msc_fontSize, L"", &m_pTextFormat);
 		if (SUCCEEDED(hr))
 			hr = m_pTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
 		if (SUCCEEDED(hr))
@@ -413,6 +412,8 @@ public:
 			*(pl->l[index]->value) = *(pi->value);
 		}
 	}
+	virtual void save(HANDLE hFile) const = 0;
+	virtual void open(HANDLE hFile) const = 0;
 };
 
 class node : public object {
@@ -573,6 +574,8 @@ public:
 		arrow* n = new arrow(this, generation);
 		return n;
 	}
+	virtual void save(HANDLE hFile) const {};
+	virtual void open(HANDLE hFile) const {};
 };
 
 class node_output :public node
@@ -611,6 +614,8 @@ public:
 		}
 		return false;
 	}
+	virtual void save(HANDLE hFile) const {};
+	virtual void open(HANDLE hFile) const {};
 };
 
 class node_normal_2 :public node
@@ -640,6 +645,8 @@ public:
 	virtual bool execute() const override {
 		return true;
 	}
+	virtual void save(HANDLE hFile) const {};
+	virtual void open(HANDLE hFile) const {};
 };
 
 class node_normal_3 :public node
@@ -669,6 +676,8 @@ public:
 	virtual bool execute() const override {
 		return true;
 	}
+	virtual void save(HANDLE hFile) const {};
+	virtual void open(HANDLE hFile) const {};
 };
 
 class node_normal_4 :public node
@@ -698,6 +707,8 @@ public:
 	virtual bool execute() const override {
 		return true;
 	}
+	virtual void save(HANDLE hFile) const {};
+	virtual void open(HANDLE hFile) const {};
 };
 
 class objectlist {
@@ -740,14 +751,14 @@ public:
 	}
 	object* hit(const point* p, UINT64 generation, const object* without = nullptr) const {
 		if (without) {
-			for (auto i : l) {
-				if (without != i && i->hit(p, generation))
-					return i;
+			for (auto i = l.rbegin(), e = l.rend(); i != e; ++i) {
+				if (without != *i && (*i)->hit(p, generation))
+					return *i;
 			}
 		} else {
-			for (auto i : l) {
-				if (i->hit(p, generation))
-					return i;
+			for (auto i = l.rbegin(), e = l.rend(); i != e; ++i) {
+				if ((*i)->hit(p, generation))
+					return *i;
 			}
 		}
 		return 0;
@@ -861,6 +872,8 @@ public:
 			p2->y = 0.0;
 		}
 	}
+	void save(UINT64 generation) const {};
+	void open(UINT64 generation) const {};
 };
 
 
@@ -897,6 +910,7 @@ public:
 	UINT64 maxgeneration;
 	std::list<object*> selectnode;
 	LONG_PTR editkind;
+	WCHAR szFilePath[512];
 
 	object* GetFirstSelectObject() const {
 		return nl.getfirstselectobject(generation);
@@ -953,6 +967,7 @@ public:
 		, maxgeneration(0)
 		, selectnode{}
 		, editkind(-1)
+		, szFilePath{}
 	{
 	}
 
@@ -961,6 +976,51 @@ public:
 		g_c.g = new graphic(hWnd);
 		OnProperty();
 		RefreshToolBar();
+	}
+
+	void OnOpen(LPCWSTR lpszFilePath = 0) {
+		if (lpszFilePath) {
+			lstrcpy(szFilePath, lpszFilePath);
+		}
+		else {
+			WCHAR szFilePath[MAX_PATH] = {};
+			OPENFILENAME of = {};
+			of.lStructSize = sizeof(OPENFILENAME);
+			of.hwndOwner = hWnd;
+			of.lpstrFilter = L"自動化ファイル (*.ele)\0*.ele\0すべてのファイル(*.*)\0*.*\0\0";
+			of.lpstrFile = szFilePath;
+			of.nMaxFile = MAX_PATH;
+			of.nMaxFileTitle = MAX_PATH;
+			of.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+			of.lpstrTitle = L"ファイルを開く";
+			if (GetOpenFileName(&of) == 0)return;
+			lstrcpy(this->szFilePath, szFilePath);
+		}
+	}
+
+	void OnSave(LPCWSTR lpszFilePath = 0) {
+		if (lpszFilePath) {
+			lstrcpy(szFilePath, lpszFilePath);
+		}
+		else {
+			TCHAR szFilePath[MAX_PATH] = { 0 };
+			TCHAR szFileTitle[MAX_PATH] = { 0 };
+			OPENFILENAME of = { 0 };
+			lstrcpy(szFilePath, TEXT("無題.ele"));
+			of.lStructSize = sizeof(OPENFILENAME);
+			of.hwndOwner = hWnd;
+			of.lpstrFilter = L"自動化ファイル (*.ele)\0*.ele\0すべてのファイル(*.*)\0*.*\0\0";
+			of.lpstrFile = szFilePath;
+			of.lpstrFileTitle = szFileTitle;
+			of.nMaxFile = MAX_PATH;
+			of.nMaxFileTitle = MAX_PATH;
+			of.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+			of.lpstrDefExt = TEXT("ele");
+			of.lpstrTitle = TEXT("ファイルを保存");
+			if (GetSaveFileName(&of) == 0)return;
+			lstrcpy(this->szFilePath, szFilePath);
+		}
+
 	}
 
 	void OnLButtonDown(int x, int y) {
@@ -1663,6 +1723,16 @@ LRESULT CALLBACK ListProc1(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
+	case WM_LBUTTONUP:
+		{
+			CallWindowProc(DefaultListWndProc, hWnd, msg, wParam, lParam);
+			POINT point;
+			GetCursorPos(&point);
+			if (WindowFromPoint(point) == hWnd) {
+				SendMessage(hWnd, WM_CHAR, VK_RETURN, 0);
+			}
+		}
+		return 0;
 	case WM_CHAR:
 		if (wParam == VK_RETURN) {
 			const int nIndex = (int)SendMessage(hWnd, LB_GETCURSEL, 0, 0);
@@ -1999,7 +2069,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 		SendMessage(hWnd, WM_APP, 0, 0);
 
-		g_c.hList = CreateWindowEx(WS_EX_TOPMOST | WS_EX_CLIENTEDGE | WS_EX_NOACTIVATE, L"LISTBOX", NULL, WS_POPUP | WS_VSCROLL, 0, 0, 0, 0, 0, NULL, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
+		g_c.hList = CreateWindowEx(WS_EX_TOPMOST | WS_EX_CLIENTEDGE | WS_EX_NOACTIVATE, L"LISTBOX", NULL, WS_POPUP | WS_VSCROLL, 0, 0, 0, 0, 0, 0, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
 		SendMessage(g_c.hList, WM_SETFONT, (WPARAM)g_c.hUIFont, 0);
 		DefaultListWndProc = (WNDPROC)SetWindowLongPtr(g_c.hList, GWLP_WNDPROC, (LONG_PTR)ListProc1);
 		{
@@ -2054,7 +2124,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_APP: // 画面DPIが変わった時、ウィンドウ作成時にフォントの生成を行う
 		GetScaling(hWnd, &g_c.uDpiX, &g_c.uDpiY);
 		DeleteObject(g_c.hUIFont);
-		g_c.hUIFont = CreateFontW(-POINT2PIXEL(FONT_SIZE), 0, 0, 0, FW_NORMAL, 0, 0, 0, SHIFTJIS_CHARSET, 0, 0, 0, 0, FONT_NAME);
+		g_c.hUIFont = CreateFontW(-POINT2PIXEL(FONT_SIZE), 0, 0, 0, FW_DONTCARE, 0, 0, 0, ANSI_CHARSET, 0, 0, 0, 0, FONT_NAME);
 		break;
 	case WM_RBUTTONDOWN:
 		if (pNoCodeApp) {
@@ -2198,6 +2268,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case ID_FEEDBACK:
 			ShellExecute(NULL, L"open", L"https://forms.gle/vAFimNY6nWnx6DCDA", NULL, NULL, SW_SHOWNORMAL);
 			break;
+		case ID_OPEN:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnOpen();
+			}
+			break;
+		case ID_SAVE:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnSave();
+			}
+			break;
 		}
 		break;
 	case WM_CLOSE:
@@ -2261,7 +2341,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 	RegisterClass(&wndclass);
 	g_c.hMainWnd = CreateWindowW(
 		szClassName,
-		L"NoCode Editor",
+		L"Elekiter",
 		WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
 		CW_USEDEFAULT,
 		0,

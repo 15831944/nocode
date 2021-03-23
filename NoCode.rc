@@ -68,12 +68,12 @@ BEGIN
         BLOCK "041104b0"
         BEGIN
             VALUE "CompanyName", "hack.jp"
-            VALUE "FileDescription", "NoCode Editor"
+            VALUE "FileDescription", "Elekiter Editor"
             VALUE "FileVersion", "1.0.0.13"
-            VALUE "InternalName", "NoCode.exe"
+            VALUE "InternalName", "Elekiter.exe"
             VALUE "LegalCopyright", "Copyright (C) 2021"
-            VALUE "OriginalFilename", "NoCode.exe"
-            VALUE "ProductName", "NoCode"
+            VALUE "OriginalFilename", "Elekiter.exe"
+            VALUE "ProductName", "Elekiter"
             VALUE "ProductVersion", "1.0.0.13"
         END
     END
