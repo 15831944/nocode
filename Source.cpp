@@ -63,6 +63,7 @@ public:
 	ID2D1SolidColorBrush* m_pSelectBrush;
 	ID2D1SolidColorBrush* m_pNormalBkBrush;
 	ID2D1SolidColorBrush* m_pSelectBkBrush;
+	ID2D1SolidColorBrush* m_pGridBrush;
 	graphic(HWND hWnd)
 		: m_pD2DFactory(0)
 		, m_pWICFactory(0)
@@ -73,6 +74,7 @@ public:
 		, m_pSelectBrush(0)
 		, m_pNormalBkBrush(0)
 		, m_pSelectBkBrush(0)
+		, m_pGridBrush(0)
 	{
 		static const FLOAT msc_fontSize = 25;
 
@@ -98,6 +100,7 @@ public:
 		SafeRelease(&m_pSelectBrush);
 		SafeRelease(&m_pNormalBkBrush);
 		SafeRelease(&m_pSelectBkBrush);
+		SafeRelease(&m_pGridBrush);
 	}
 	bool begindraw(HWND hWnd) {
 		HRESULT hr = S_OK;
@@ -115,6 +118,8 @@ public:
 				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.75f), &m_pNormalBkBrush);
 			if (SUCCEEDED(hr))
 				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 0.0f, 0.0f, 0.25f), &m_pSelectBkBrush);
+			if (SUCCEEDED(hr))
+				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(0.80f, 0.80f, 0.80f, 1.00f), &m_pGridBrush);
 		}
 		if (SUCCEEDED(hr))
 		{
@@ -131,6 +136,7 @@ public:
 			SafeRelease(&m_pSelectBrush);
 			SafeRelease(&m_pNormalBkBrush);
 			SafeRelease(&m_pSelectBkBrush);
+			SafeRelease(&m_pGridBrush);
 		}
 	}
 };
@@ -149,6 +155,7 @@ public:
 	UINT uDpiY;
 	graphic* g;
 	void* app;
+	BOOL bShowGrid;
 	common()
 		: hTool(0)
 		, hUIFont(0)
@@ -162,6 +169,7 @@ public:
 		, uDpiY(DEFAULT_DPI)
 		, g(0)
 		, app(0)
+		, bShowGrid(TRUE)
 	{
 		//CreateFont
 	}
@@ -1232,12 +1240,42 @@ public:
 			if (g_c.g->begindraw(hWnd)) {
 				g_c.g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 				g_c.g->m_pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
+				if (g_c.bShowGrid) {
+					drawgrid(g_c.g, &t);
+				}
 				nl.paint(g_c.g, &t, generation, mode == dragnode ? &dragoffset : nullptr);
 				if (nn) nn->paint(g_c.g, &t, generation);
 				g_c.g->enddraw();
 			}
 		}
 		ValidateRect(hWnd, NULL);
+	}
+
+	void drawgrid(const graphic* g, const trans* t) {
+		g->m_pRenderTarget->SetTransform(
+			D2D1::Matrix3x2F::Translation((FLOAT)(t->c.w / 2 + t->p.x - t->l.x), (FLOAT)(t->c.h / 2 + t->p.y - t->l.y)) *
+			D2D1::Matrix3x2F::Scale((FLOAT)t->z, (FLOAT)t->z, D2D1::Point2F((FLOAT)(t->c.w / 2 + t->p.x), (FLOAT)(t->c.h / 2 + t->p.y)))
+		);
+		point p1;
+		t->d2l(&t->p, &p1);
+		point p2 = t->p;
+		p2.x += t->c.w;
+		p2.y += t->c.h;
+		point p3;
+		t->d2l(&p2, &p3);
+		for (int x = ((int)p1.x / 100) * 100; x <= ((int)p3.x / 100) * 100; x += 100)
+		{
+			D2D1_POINT_2F s = { (float)x, (float)p1.y };
+			D2D1_POINT_2F e = { (float)x, (float)p3.y };
+			g->m_pRenderTarget->DrawLine(s, e, g->m_pGridBrush);
+		}
+		for (int y = ((int)p1.y / 100) * 100; y <= ((int)p3.y / 100) * 100; y += 100)
+		{
+			D2D1_POINT_2F s = { (float)p1.x, (float)y };
+			D2D1_POINT_2F e = { (float)p3.x, (float)y };
+			g->m_pRenderTarget->DrawLine(s, e, g->m_pGridBrush);
+		}
+		g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 	}
 
 	void OnSize(int x, int y, int w, int h) {
@@ -1463,7 +1501,7 @@ public:
 						case PROPERTY_SINGLELINESTRING:
 							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							{
-								HWND hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, RICHEDIT_CLASSW, 0, WS_VISIBLE | WS_CHILD | WS_TABSTOP | ES_NOHIDESEL, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
+								HWND hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, RICHEDIT_CLASSW, 0, WS_VISIBLE | WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL| ES_NOHIDESEL, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 								SendMessage(hEdit, EM_SETEDITSTYLE, SES_EMULATESYSEDIT, SES_EMULATESYSEDIT);
 								SendMessage(hEdit, EM_SETEVENTMASK, 0, ENM_UPDATE);
 								SendMessage(hEdit, EM_LIMITTEXT, -1, 0);
