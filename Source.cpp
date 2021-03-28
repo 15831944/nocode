@@ -34,9 +34,11 @@
 #define FONT_SIZE 14
 #define NODE_WIDTH 200
 #define NODE_HEIGHT 100
+#define GRID_WIDTH 25
 #define ZOOM_MAX 10.0
 #define ZOOM_MIN 0.5
 #define ZOOM_STEP 1.20
+#define CONNECT_POINT_WIDTH 8.0f
 
 WCHAR szClassName[] = L"Elekiter";
 HHOOK g_hHook;
@@ -64,6 +66,8 @@ public:
 	ID2D1SolidColorBrush* m_pNormalBkBrush;
 	ID2D1SolidColorBrush* m_pSelectBkBrush;
 	ID2D1SolidColorBrush* m_pGridBrush;
+	ID2D1SolidColorBrush* m_pConnectPointBrush;
+	ID2D1SolidColorBrush* m_pConnectPointBkBrush;
 	graphic(HWND hWnd)
 		: m_pD2DFactory(0)
 		, m_pWICFactory(0)
@@ -75,6 +79,8 @@ public:
 		, m_pNormalBkBrush(0)
 		, m_pSelectBkBrush(0)
 		, m_pGridBrush(0)
+		, m_pConnectPointBrush(0)
+		, m_pConnectPointBkBrush(0)
 	{
 		static const FLOAT msc_fontSize = 25;
 
@@ -101,6 +107,8 @@ public:
 		SafeRelease(&m_pNormalBkBrush);
 		SafeRelease(&m_pSelectBkBrush);
 		SafeRelease(&m_pGridBrush);
+		SafeRelease(&m_pConnectPointBrush);
+		SafeRelease(&m_pConnectPointBkBrush);
 	}
 	bool begindraw(HWND hWnd) {
 		HRESULT hr = S_OK;
@@ -120,6 +128,10 @@ public:
 				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 0.0f, 0.0f, 0.25f), &m_pSelectBkBrush);
 			if (SUCCEEDED(hr))
 				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(0.80f, 0.80f, 0.80f, 1.00f), &m_pGridBrush);
+			if (SUCCEEDED(hr))
+				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.00f), &m_pConnectPointBrush);
+			if (SUCCEEDED(hr))
+				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.75f), &m_pConnectPointBkBrush);
 		}
 		if (SUCCEEDED(hr))
 		{
@@ -137,6 +149,8 @@ public:
 			SafeRelease(&m_pNormalBkBrush);
 			SafeRelease(&m_pSelectBkBrush);
 			SafeRelease(&m_pGridBrush);
+			SafeRelease(&m_pConnectPointBrush);
+			SafeRelease(&m_pConnectPointBkBrush);
 		}
 	}
 };
@@ -155,7 +169,7 @@ public:
 	UINT uDpiY;
 	graphic* g;
 	void* app;
-	BOOL bShowGrid;
+	bool bShowGrid;
 	common()
 		: hTool(0)
 		, hUIFont(0)
@@ -454,9 +468,50 @@ public:
 		rrect.radiusY = 3.0f;
 		rrect.rect = rect;
 		g->m_pRenderTarget->FillRoundedRectangle(&rrect, select ? g->m_pSelectBkBrush : g->m_pNormalBkBrush);
-		g->m_pRenderTarget->DrawRoundedRectangle(&rrect, select ? g->m_pSelectBrush : g->m_pNormalBrush);
+		g->m_pRenderTarget->DrawRoundedRectangle(&rrect, select ? g->m_pSelectBrush : g->m_pNormalBrush, 2.0f);
 		g->m_pRenderTarget->DrawText(name, lstrlenW(name), g->m_pTextFormat, &rect, select ? g->m_pSelectBrush : g->m_pNormalBrush);
 		g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
+		if (select && offset == nullptr) {
+			drawconnectpoint(g, t, generation);
+		}
+	}
+	virtual void drawconnectpoint(const graphic* g, const trans* t, UINT64 generation) const {
+		if (!isalive(generation)) return;
+		g->m_pRenderTarget->SetTransform(
+			D2D1::Matrix3x2F::Translation((FLOAT)(t->c.w / 2 + t->p.x - t->l.x), (FLOAT)(t->c.h / 2 + t->p.y - t->l.y)) *
+			D2D1::Matrix3x2F::Scale((FLOAT)t->z, (FLOAT)t->z, D2D1::Point2F((FLOAT)(t->c.w / 2 + t->p.x), (FLOAT)(t->c.h / 2 + t->p.y)))
+		);
+		D2D1_ELLIPSE top1 = { { (float)p.x, (float)(p.y - s.h / 2.0) }, CONNECT_POINT_WIDTH, CONNECT_POINT_WIDTH };
+		D2D1_ELLIPSE bottom1 = { { (float)p.x, (float)(p.y + s.h / 2.0) }, CONNECT_POINT_WIDTH, CONNECT_POINT_WIDTH };
+		D2D1_ELLIPSE left1 = { { (float)(p.x - s.w / 2.0), (float)p.y }, CONNECT_POINT_WIDTH, CONNECT_POINT_WIDTH };
+		D2D1_ELLIPSE right1 = { { (float)(p.x + s.w / 2.0), (float)p.y }, CONNECT_POINT_WIDTH, CONNECT_POINT_WIDTH };
+		g->m_pRenderTarget->FillEllipse(&top1, g->m_pConnectPointBkBrush);
+		g->m_pRenderTarget->DrawEllipse(&top1, g->m_pConnectPointBrush);
+		g->m_pRenderTarget->FillEllipse(&bottom1, g->m_pConnectPointBkBrush);
+		g->m_pRenderTarget->DrawEllipse(&bottom1, g->m_pConnectPointBrush);
+		g->m_pRenderTarget->FillEllipse(&left1, g->m_pConnectPointBkBrush);
+		g->m_pRenderTarget->DrawEllipse(&left1, g->m_pConnectPointBrush);
+		g->m_pRenderTarget->FillEllipse(&right1, g->m_pConnectPointBkBrush);
+		g->m_pRenderTarget->DrawEllipse(&right1, g->m_pConnectPointBrush);
+		g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
+	}
+	virtual int hitconnectpoint(const point* p, UINT64 generation) const { // top->1, bottom->2, left->3, right->4, else->0
+		if (isalive(generation)) {
+			D2D1_POINT_2F points[] = {
+				{ (float)this->p.x, (float)(this->p.y - s.h / 2.0) },
+				{ (float)this->p.x, (float)(this->p.y + s.h / 2.0) },
+				{ (float)(this->p.x - s.w / 2.0), (float)this->p.y },
+				{ (float)(this->p.x + s.w / 2.0), (float)this->p.y }
+			};
+			int index = 0;
+			for (auto i : points) {
+				index++;
+				if (sqrt((i.x - p->x) * (i.x - p->x) + (i.y - p->y) * (i.y - p->y)) < CONNECT_POINT_WIDTH) {
+					return index;
+				}
+			}
+		}
+		return 0;
 	}
 	virtual bool hit(const point* p, UINT64 generation) const {
 		return
@@ -478,55 +533,105 @@ public:
 };
 
 class arrow : public object {
+	typedef enum { CONNECT_NONE, CONNECT_TOP, CONNECT_BOTTOM, CONNECT_LEFT, CONNECT_RIGHT} CONNECT_POSITION;
 public:
 	node* start;
 	node* end;
+	CONNECT_POSITION start_pos;
+	CONNECT_POSITION end_pos;
 
-	arrow(UINT64 initborn) : object(initborn), start(0), end(0) {}
+	const float nArrowSize = 16.0;
+	const float nArrowWidth = 8.0;
+
+	arrow(UINT64 initborn) : object(initborn), start(0), end(0), start_pos(CONNECT_NONE), end_pos(CONNECT_NONE) {}
 
 	arrow(const arrow* src, UINT64 initborn) : object(initborn) {
 		start = src->start;
 		end = src->end;
+		start_pos = src->start_pos;
+		end_pos = src->end_pos;
 	}
 
-	virtual void paint(const graphic* g, const trans* t, UINT64 generation, const point* offset = nullptr) const override {
-		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)) {
+	virtual void paint(const graphic* g, const trans* t, UINT64 generation, const point* offset = nullptr) const override { // 書き直す必要あり
+		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)
+			&& start_pos != CONNECT_NONE && end_pos != CONNECT_NONE) {
 			g->m_pRenderTarget->SetTransform(
 				D2D1::Matrix3x2F::Translation((FLOAT)(t->c.w / 2 + t->p.x - t->l.x), (FLOAT)(t->c.h / 2 + t->p.y - t->l.y)) *
 				D2D1::Matrix3x2F::Scale((FLOAT)t->z, (FLOAT)t->z, D2D1::Point2F((FLOAT)(t->c.w / 2 + t->p.x), (FLOAT)(t->c.h / 2 + t->p.y)))
 			);
-			D2D1_POINT_2F c1 = {
-				(float)(start->p.x + (offset ? offset->x : 0.0)),
-				(float)(start->p.y + (offset ? offset->y : 0.0))
-			};
-			D2D1_POINT_2F c2 = {
-				(float)(end->p.x + (offset ? offset->x : 0.0)),
-				(float)(start->p.y + (offset ? offset->y : 0.0))
-			};
-			D2D1_POINT_2F c3 = {
-				(float)(start->p.x + (offset ? offset->x : 0.0)),
-				(float)(end->p.y + (offset ? offset->y : 0.0))
-			};
-			D2D1_POINT_2F c4 = {
-				(float)(end->p.x + (offset ? offset->x : 0.0)),
-				(float)(end->p.y + (offset ? offset->y : 0.0))
-			};
+			D2D1_POINT_2F c1, c2, c3, c4;
+			D2D1_POINT_2F t1, t2, t3;
+			if (abs(start->p.x - end->p.x) - NODE_WIDTH < abs(start->p.y - end->p.y) - NODE_HEIGHT) {
+				// たて⇔たて
+				if (start->p.y < end->p.y) {
+					c1 = { (float)(start->p.x + (offset ? offset->x : 0.0)), (float)(start->p.y + NODE_HEIGHT / 2.0 + (offset ? offset->y : 0.0)) };
+					c4 = { (float)(end->p.x + (offset ? offset->x : 0.0)), (float)(end->p.y - NODE_HEIGHT / 2.0 - nArrowSize - 5.0f + (offset ? offset->y : 0.0)) };
+					t1 = { c4.x, c4.y + nArrowSize};
+					t2 = { t1.x - nArrowWidth,t1.y - nArrowSize };
+					t3 = { t1.x + nArrowWidth,t1.y - nArrowSize };
+				}
+				else {
+					c4 = { (float)(start->p.x + (offset ? offset->x : 0.0)), (float)(start->p.y - NODE_HEIGHT / 2.0 + (offset ? offset->y : 0.0)) };
+					c1 = { (float)(end->p.x + (offset ? offset->x : 0.0)), (float)(end->p.y + NODE_HEIGHT / 2.0 + nArrowSize + 5.0f + (offset ? offset->y : 0.0)) };
+					t1 = { c1.x, c1.y - nArrowSize };
+					t2 = { t1.x - nArrowWidth,t1.y + nArrowSize };
+					t3 = { t1.x + nArrowWidth,t1.y + nArrowSize };
+				}
+				c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
+				c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
+			}
+			else {
+				// よこ⇔よこ
+				if (start->p.x < end->p.x) {
+					c1 = { (float)(start->p.x + NODE_WIDTH / 2.0 + (offset ? offset->x : 0.0)), (float)(start->p.y + (offset ? offset->y : 0.0)) };
+					c4 = { (float)(end->p.x - NODE_WIDTH / 2.0 - nArrowSize - 5.0f + (offset ? offset->x : 0.0)), (float)(end->p.y + (offset ? offset->y : 0.0)) };
+					t1 = { c4.x + nArrowSize, c4.y};
+					t2 = { t1.x - nArrowSize,t1.y + nArrowWidth };
+					t3 = { t1.x - nArrowSize,t1.y - nArrowWidth };
+				}
+				else {
+					c4 = { (float)(start->p.x - NODE_WIDTH / 2.0 + (offset ? offset->x : 0.0)), (float)(start->p.y + (offset ? offset->y : 0.0)) };
+					c1 = { (float)(end->p.x + NODE_WIDTH / 2.0 + nArrowSize + 5.0f + (offset ? offset->x : 0.0)), (float)(end->p.y + (offset ? offset->y : 0.0)) };
+					t1 = { c1.x - nArrowSize, c1.y };
+					t2 = { t1.x + nArrowSize,t1.y + nArrowWidth };
+					t3 = { t1.x + nArrowSize,t1.y - nArrowWidth };
+				}
+				c2 = { (float)((3.0 * c4.x + c1.x) / 4.0),  c1.y };
+				c3 = { (float)((3.0 * c1.x + c4.x) / 4.0), c4.y };
+			}
 			ID2D1PathGeometry* pPathGeometry;
 			g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
-			ID2D1GeometrySink* pSink;
-			pPathGeometry->Open(&pSink);
-			pSink->SetFillMode(D2D1_FILL_MODE_WINDING);
-			pSink->BeginFigure(c1, D2D1_FIGURE_BEGIN_FILLED);
-			pSink->AddBezier(D2D1::BezierSegment(c2, c3, c4));
-			pSink->EndFigure(D2D1_FIGURE_END_OPEN);
-			pSink->Close();
-			SafeRelease(&pSink);
-			g->m_pRenderTarget->DrawGeometry(pPathGeometry, select ? g->m_pSelectBrush : g->m_pNormalBrush, 2.0f);
-			SafeRelease(&pPathGeometry);
+			if (pPathGeometry) {
+				ID2D1GeometrySink* pSink;
+				pPathGeometry->Open(&pSink);
+				pSink->SetFillMode(D2D1_FILL_MODE_WINDING);
+				pSink->BeginFigure(c1, D2D1_FIGURE_BEGIN_FILLED);
+				pSink->AddBezier(D2D1::BezierSegment(c2, c3, c4));
+				pSink->EndFigure(D2D1_FIGURE_END_OPEN);
+				pSink->Close();
+				SafeRelease(&pSink);
+				g->m_pRenderTarget->DrawGeometry(pPathGeometry, select ? g->m_pSelectBrush : g->m_pNormalBrush, 4.0f);
+				SafeRelease(&pPathGeometry);
+			}
+			g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
+			if (pPathGeometry) {
+				ID2D1GeometrySink* pSink;
+				pPathGeometry->Open(&pSink);
+				pSink->SetFillMode(D2D1_FILL_MODE_WINDING);
+				pSink->BeginFigure(t1, D2D1_FIGURE_BEGIN_FILLED);
+				D2D1_POINT_2F points[] = {t2,t3};
+				pSink->AddLines(points, ARRAYSIZE(points));
+				pSink->EndFigure(D2D1_FIGURE_END_CLOSED);
+				pSink->Close();
+				SafeRelease(&pSink);
+				g->m_pRenderTarget->FillGeometry(pPathGeometry, select ? g->m_pSelectBrush : g->m_pNormalBrush);
+				g->m_pRenderTarget->DrawGeometry(pPathGeometry, select ? g->m_pSelectBrush : g->m_pNormalBrush, 4.0f);
+				SafeRelease(&pPathGeometry);
+			}
 			g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 		}
 	}
-	virtual bool hit(const point* p, UINT64 generation) const override {
+	virtual bool hit(const point* p, UINT64 generation) const override { // 書き直す必要あり
 		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)) {
 			D2D1_POINT_2F c1 = {
 				(float)(start->p.x),
@@ -567,7 +672,7 @@ public:
 		}
 		return false;
 	}
-	virtual bool inrect(const point* p1, const point* p2, UINT64 generation) const override {
+	virtual bool inrect(const point* p1, const point* p2, UINT64 generation) const override { // 書き直す必要あり
 		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)) {
 			if (
 				p1->x <= min(start->p.x, end->p.x) && max(start->p.x, end->p.x) <= p2->x &&
@@ -595,7 +700,7 @@ public:
 		pl->description = L"入力値を[出力]に表示します。";
 		{
 			propertyitem* pi = new propertyitem;
-			pi->kind = PROPERTY_SINGLELINESTRING;
+			pi->kind = PROPERTY_MULTILINESTRING;
 			pi->setname(L"入力値");
 			pi->sethelp(L"テキストを入力してください。変数名を入力することも可能です。");
 			pi->setdescription(L"入力された文字列を「出力」に表示します。");
@@ -758,16 +863,9 @@ public:
 		}
 	}
 	object* hit(const point* p, UINT64 generation, const object* without = nullptr) const {
-		if (without) {
-			for (auto i = l.rbegin(), e = l.rend(); i != e; ++i) {
-				if (without != *i && (*i)->hit(p, generation))
-					return *i;
-			}
-		} else {
-			for (auto i = l.rbegin(), e = l.rend(); i != e; ++i) {
-				if ((*i)->hit(p, generation))
-					return *i;
-			}
+		for (auto i = l.rbegin(), e = l.rend(); i != e; ++i) {
+			if (without != *i && (*i)->hit(p, generation))
+				return *i;
 		}
 		return 0;
 	}
@@ -1031,6 +1129,11 @@ public:
 
 	}
 
+	void OnViewGrid(bool view) {
+		g_c.bShowGrid = view;
+		InvalidateRect(hWnd, NULL, FALSE);
+	}
+
 	void OnLButtonDown(int x, int y) {
 		point p1{ (double)x, (double)y };
 		point p2;
@@ -1186,6 +1289,10 @@ public:
 			point p1{ (double)x, (double)y };
 			point p2;
 			t.d2l(&p1, &p2);
+			if (g_c.bShowGrid) {
+				p2.x = ((int)(p2.x- dragstartL.x) / GRID_WIDTH) * GRID_WIDTH + dragstartL.x;
+				p2.y = ((int)(p2.y- dragstartL.y) / GRID_WIDTH) * GRID_WIDTH + dragstartL.y;
+			}
 			dragoffset.x = p2.x - dragstartL.x;
 			dragoffset.y = p2.y - dragstartL.y;
 			if (abs(p1.x - dragstartP.x) >= DRAGJUDGEWIDTH || abs(p1.y - dragstartP.y) >= DRAGJUDGEWIDTH)
@@ -1263,17 +1370,17 @@ public:
 		p2.y += t->c.h;
 		point p3;
 		t->d2l(&p2, &p3);
-		for (int x = ((int)p1.x / 100) * 100; x <= ((int)p3.x / 100) * 100; x += 100)
+		for (int x = ((int)p1.x / GRID_WIDTH) * GRID_WIDTH; x <= ((int)p3.x / GRID_WIDTH) * GRID_WIDTH; x += GRID_WIDTH)
 		{
 			D2D1_POINT_2F s = { (float)x, (float)p1.y };
 			D2D1_POINT_2F e = { (float)x, (float)p3.y };
-			g->m_pRenderTarget->DrawLine(s, e, g->m_pGridBrush);
+			g->m_pRenderTarget->DrawLine(s, e, g->m_pGridBrush, 0.1f);
 		}
-		for (int y = ((int)p1.y / 100) * 100; y <= ((int)p3.y / 100) * 100; y += 100)
+		for (int y = ((int)p1.y / GRID_WIDTH) * GRID_WIDTH; y <= ((int)p3.y / GRID_WIDTH) * GRID_WIDTH; y += GRID_WIDTH)
 		{
 			D2D1_POINT_2F s = { (float)p1.x, (float)y };
 			D2D1_POINT_2F e = { (float)p3.x, (float)y };
-			g->m_pRenderTarget->DrawLine(s, e, g->m_pGridBrush);
+			g->m_pRenderTarget->DrawLine(s, e, g->m_pGridBrush, 0.1f);
 		}
 		g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 	}
@@ -1320,6 +1427,10 @@ public:
 			beginedit();
 			nl.unselect(generation);
 			nn->born = generation;
+			if (g_c.bShowGrid) {
+				nn->p.x = ((int)(nn->p.x) / GRID_WIDTH) * GRID_WIDTH;
+				nn->p.y = ((int)(nn->p.y) / GRID_WIDTH) * GRID_WIDTH;
+			}
 			nl.add(nn);
 			nn = nullptr;
 			OnProperty();
@@ -1501,7 +1612,7 @@ public:
 						case PROPERTY_SINGLELINESTRING:
 							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							{
-								HWND hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, RICHEDIT_CLASSW, 0, WS_VISIBLE | WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL| ES_NOHIDESEL, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
+								HWND hEdit = CreateWindowEx(WS_EX_STATICEDGE, RICHEDIT_CLASSW, 0, WS_VISIBLE | WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL| ES_NOHIDESEL, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 								SendMessage(hEdit, EM_SETEDITSTYLE, SES_EMULATESYSEDIT, SES_EMULATESYSEDIT);
 								SendMessage(hEdit, EM_SETEVENTMASK, 0, ENM_UPDATE);
 								SendMessage(hEdit, EM_LIMITTEXT, -1, 0);
@@ -1514,7 +1625,7 @@ public:
 						case PROPERTY_MULTILINESTRING:
 							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							{
-								HWND hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, RICHEDIT_CLASSW, 0, WS_VISIBLE | WS_CHILD | WS_TABSTOP | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE | ES_NOHIDESEL, POINT2PIXEL(4), nYtop + POINT2PIXEL(28), POINT2PIXEL(256 - 8), POINT2PIXEL(28 + 256) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
+								HWND hEdit = CreateWindowEx(WS_EX_STATICEDGE, RICHEDIT_CLASSW, 0, WS_VISIBLE | WS_CHILD | WS_TABSTOP | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE | ES_WANTRETURN | ES_NOHIDESEL, POINT2PIXEL(4), nYtop + POINT2PIXEL(28), POINT2PIXEL(256 - 8), POINT2PIXEL(28 + 256) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 								SendMessage(hEdit, EM_SETEDITSTYLE, SES_EMULATESYSEDIT, SES_EMULATESYSEDIT);
 								SendMessage(hEdit, EM_SETEVENTMASK, 0, ENM_UPDATE);
 								SendMessage(hEdit, EM_LIMITTEXT, -1, 0);
@@ -1552,36 +1663,33 @@ public:
 			enable_edit_event = true;
 			EnumChildWindows(hDlg, EnumChildSetFontProc, 0);
 			return TRUE;
-		case WM_COMMAND:
+		case WM_APP:
 			if (pNoCodeApp) {
-				switch (HIWORD(wParam)) {
-				case EN_UPDATE:
-					if (enable_edit_event) {
-						object* n = pNoCodeApp->GetFirstSelectObject();
-						if (n && n->pl) {
-							int nIndex = LOWORD(wParam) - 1000;
-							if (0 <= nIndex && nIndex < (int)n->pl->l.size()) {
-								DWORD dwSize = GetWindowTextLength((HWND)lParam);
-								LPWSTR lpszText = (LPWSTR)GlobalAlloc(0, (dwSize + 1) * sizeof(WCHAR));
-								GetWindowText((HWND)lParam, lpszText, dwSize + 1);
-								if (!n->pl->l[nIndex]->match || std::regex_match(lpszText, std::wregex(*n->pl->l[nIndex]->match))) {
-									propertyitem* pi = n->pl->l[nIndex]->copy();
-									*(pi->value) = lpszText;
-									pNoCodeApp->UpdateSelectNode(nIndex, pi, (LONG_PTR)lParam); // とりあえずこの項目についてユニークな値が欲しい。
-									delete pi;
-								} else if (n->pl->l[nIndex]->help) {
-									EDITBALLOONTIP balloonTip = {};
-									balloonTip.cbStruct = sizeof(EDITBALLOONTIP);
-									balloonTip.pszText = n->pl->l[nIndex]->help->c_str();
-									balloonTip.pszTitle = L"入力エラー";
-									balloonTip.ttiIcon = TTI_ERROR;
-									Edit_ShowBalloonTip((HWND)lParam, &balloonTip);
-								}
-								GlobalFree(lpszText);
+				if (HIWORD(wParam) == EN_UPDATE) {
+					object* n = pNoCodeApp->GetFirstSelectObject();
+					if (n && n->pl) {
+						int nIndex = LOWORD(wParam) - 1000;
+						if (0 <= nIndex && nIndex < (int)n->pl->l.size()) {
+							DWORD dwSize = GetWindowTextLength((HWND)lParam);
+							LPWSTR lpszText = (LPWSTR)GlobalAlloc(0, (dwSize + 1) * sizeof(WCHAR));
+							GetWindowText((HWND)lParam, lpszText, dwSize + 1);
+							if (!n->pl->l[nIndex]->match || std::regex_match(lpszText, std::wregex(*n->pl->l[nIndex]->match))) {
+								propertyitem* pi = n->pl->l[nIndex]->copy();
+								*(pi->value) = lpszText;
+								pNoCodeApp->UpdateSelectNode(nIndex, pi, (LONG_PTR)lParam); // とりあえずこの項目についてユニークな値が欲しい。
+								delete pi;
 							}
+							else if (n->pl->l[nIndex]->help) {
+								EDITBALLOONTIP balloonTip = {};
+								balloonTip.cbStruct = sizeof(EDITBALLOONTIP);
+								balloonTip.pszText = n->pl->l[nIndex]->help->c_str();
+								balloonTip.pszTitle = L"入力エラー";
+								balloonTip.ttiIcon = TTI_ERROR;
+								Edit_ShowBalloonTip((HWND)lParam, &balloonTip);
+							}
+							GlobalFree(lpszText);
 						}
 					}
-					break;
 				}
 			}
 			break;
@@ -1674,11 +1782,19 @@ LRESULT CALLBACK RichEditProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				}
 				SendMessage(g_c.hList, LB_SETCURSEL, 0, 0);
 				ShowWindow(g_c.hList, SW_SHOW);
-				return CallWindowProc(DefaultRichEditProc, hWnd, msg, wParam, lParam);
 			}
 		}
 		else {
 			ShowWindow(g_c.hList, SW_HIDE);
+		}
+		{
+			const LONG_PTR ret = CallWindowProc(DefaultRichEditProc, hWnd, msg, wParam, lParam);
+			HWND hParent = GetParent(hWnd);
+			if (hParent) {
+				int id = GetWindowLong(hWnd, GWL_ID);
+				SendMessage(hParent, WM_APP, MAKEWPARAM(id, EN_UPDATE), (LPARAM)hWnd);
+			}
+			return ret;
 		}
 		break;
 	case WM_KILLFOCUS:
@@ -1692,64 +1808,64 @@ LRESULT CALLBACK RichEditProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 	case WM_PAINT:
-	{
-		HideCaret(hWnd);
-		CallWindowProc(DefaultRichEditProc, hWnd, msg, wParam, lParam);
-		RECT rect;
-		SendMessage(hWnd, EM_GETRECT, 0, (LPARAM)&rect);
-		LONG_PTR eax = SendMessage(hWnd, EM_CHARFROMPOS, 0, (LPARAM)&rect);
-		eax = SendMessage(hWnd, EM_LINEFROMCHAR, eax, 0);
-		TEXTRANGE txtrange = {};
-		txtrange.chrg.cpMin = (LONG)SendMessage(hWnd, EM_LINEINDEX, eax, 0);
-		txtrange.chrg.cpMax = (LONG)SendMessage(hWnd, EM_CHARFROMPOS, 0, (LPARAM)&rect.right);
-		LONG_PTR FirstChar = txtrange.chrg.cpMin;
-		HRGN hRgn = CreateRectRgn(rect.left, rect.top, rect.right, rect.bottom);
-		HDC hdc = GetDC(hWnd);
-		SetBkMode(hdc, TRANSPARENT);
-		HRGN hOldRgn = (HRGN)SelectObject(hdc, hRgn);
-		DWORD dwTextSize = txtrange.chrg.cpMax - txtrange.chrg.cpMin;
-		if (dwTextSize > 0) {
-			LPWSTR pBuffer = (LPWSTR)GlobalAlloc(0, (dwTextSize + 1) * sizeof(WCHAR));
-			if (pBuffer) {
-				txtrange.lpstrText = pBuffer;
-				if (SendMessage(hWnd, EM_GETTEXTRANGE, 0, (LPARAM)&txtrange) > 0) {
-					LPWSTR lpszStart = wcsstr(txtrange.lpstrText, L"[");
-					while (lpszStart) {
-						while (*(lpszStart + 1) == L'[') {
-							lpszStart++;
-						}
-						LPWSTR lpszEnd = wcsstr(lpszStart, L"]");
-						if (lpszEnd) {
-							const int nTextLen = (int)(lpszEnd - lpszStart);
-							LPWSTR lpszText = (LPWSTR)GlobalAlloc(0, nTextLen * sizeof(WCHAR));
-							if (lpszText) {
-								(void)lstrcpyn(lpszText, lpszStart + 1, nTextLen);
-								if (g_c.app && ((NoCodeApp*)g_c.app)->IsHighlightText(lpszText)) {
-									SendMessage(hWnd, EM_POSFROMCHAR, (WPARAM)&rect, lpszStart - txtrange.lpstrText + FirstChar);
-									COLORREF colOld = SetTextColor(hdc, RGB(128, 128, 255));
-									HFONT hOldFont = (HFONT)SelectObject(hdc, g_c.hUIFont);
-									DrawText(hdc, lpszStart, nTextLen + 1, &rect, 0);
-									SelectObject(hdc, hOldFont);
-								}
-								GlobalFree(lpszText);
+		{
+			HideCaret(hWnd);
+			CallWindowProc(DefaultRichEditProc, hWnd, msg, wParam, lParam);
+			RECT rect;
+			SendMessage(hWnd, EM_GETRECT, 0, (LPARAM)&rect);
+			LONG_PTR eax = SendMessage(hWnd, EM_CHARFROMPOS, 0, (LPARAM)&rect);
+			eax = SendMessage(hWnd, EM_LINEFROMCHAR, eax, 0);
+			TEXTRANGE txtrange = {};
+			txtrange.chrg.cpMin = (LONG)SendMessage(hWnd, EM_LINEINDEX, eax, 0);
+			txtrange.chrg.cpMax = (LONG)SendMessage(hWnd, EM_CHARFROMPOS, 0, (LPARAM)&rect.right);
+			LONG_PTR FirstChar = txtrange.chrg.cpMin;
+			HRGN hRgn = CreateRectRgn(rect.left, rect.top, rect.right, rect.bottom);
+			HDC hdc = GetDC(hWnd);
+			SetBkMode(hdc, TRANSPARENT);
+			HRGN hOldRgn = (HRGN)SelectObject(hdc, hRgn);
+			DWORD dwTextSize = txtrange.chrg.cpMax - txtrange.chrg.cpMin;
+			if (dwTextSize > 0) {
+				LPWSTR pBuffer = (LPWSTR)GlobalAlloc(0, (dwTextSize + 1) * sizeof(WCHAR));
+				if (pBuffer) {
+					txtrange.lpstrText = pBuffer;
+					if (SendMessage(hWnd, EM_GETTEXTRANGE, 0, (LPARAM)&txtrange) > 0) {
+						LPWSTR lpszStart = wcsstr(txtrange.lpstrText, L"[");
+						while (lpszStart) {
+							while (*(lpszStart + 1) == L'[') {
+								lpszStart++;
 							}
+							LPWSTR lpszEnd = wcsstr(lpszStart, L"]");
+							if (lpszEnd) {
+								const int nTextLen = (int)(lpszEnd - lpszStart);
+								LPWSTR lpszText = (LPWSTR)GlobalAlloc(0, nTextLen * sizeof(WCHAR));
+								if (lpszText) {
+									(void)lstrcpyn(lpszText, lpszStart + 1, nTextLen);
+									if (g_c.app && ((NoCodeApp*)g_c.app)->IsHighlightText(lpszText)) {
+										SendMessage(hWnd, EM_POSFROMCHAR, (WPARAM)&rect, lpszStart - txtrange.lpstrText + FirstChar);
+										COLORREF colOld = SetTextColor(hdc, RGB(128, 128, 255));
+										HFONT hOldFont = (HFONT)SelectObject(hdc, g_c.hUIFont);
+										DrawText(hdc, lpszStart, nTextLen + 1, &rect, 0);
+										SelectObject(hdc, hOldFont);
+									}
+									GlobalFree(lpszText);
+								}
+							}
+							else {
+								break;
+							}
+							lpszStart = wcsstr(lpszEnd, L"[");
 						}
-						else {
-							break;
-						}
-						lpszStart = wcsstr(lpszEnd, L"[");
 					}
+					GlobalFree(pBuffer);
 				}
-				GlobalFree(pBuffer);
 			}
+			SelectObject(hdc, hOldRgn);
+			DeleteObject(hRgn);
+			ReleaseDC(hWnd, hdc);
+			ShowCaret(hWnd);
+			return 0;
 		}
-		SelectObject(hdc, hOldRgn);
-		DeleteObject(hRgn);
-		ReleaseDC(hWnd, hdc);
-		ShowCaret(hWnd);
-		return 0;
-	}
-	break;
+		break;
 	default:
 		break;
 	}
@@ -1859,20 +1975,30 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 	static NoCodeApp* pNoCodeApp;
 	static HWND hTree;
 	static int flag;
+	static HIMAGELIST hImageList;
 	switch (msg)
 	{
 	case WM_INITDIALOG:
 		pNoCodeApp = (NoCodeApp*)lParam;
 		{
 			hTree = CreateWindowEx(WS_EX_CLIENTEDGE, WC_TREEVIEW, 0, WS_CHILD | WS_VISIBLE | TVS_HASBUTTONS | TVS_LINESATROOT, 0, 0, 0, 0, hWnd, 0, GetModuleHandle(0), 0);
+
+			hImageList = ImageList_Create(32, 32, ILC_COLOR16, 4, 10);
+			HBITMAP hBitMap = LoadBitmap(GetModuleHandle(0), MAKEINTRESOURCE(IDB_BITMAP2));
+			ImageList_Add(hImageList, hBitMap, NULL);
+			DeleteObject(hBitMap);
+			TreeView_SetImageList(hTree, hImageList, TVSIL_NORMAL); 
+
 			HTREEITEM hRootItem = 0;
 			{
 				SetFocus(hTree);
 				TV_INSERTSTRUCT tv = { 0 };
-				tv.hInsertAfter = TVI_LAST;
-				tv.item.mask = TVIF_TEXT;
 				tv.hParent = TVI_ROOT;
+				tv.hInsertAfter = TVI_LAST;
+				tv.item.mask = TVIF_TEXT | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
 				tv.item.pszText = TEXT("Root");
+				tv.item.iImage = 0;
+				tv.item.iSelectedImage = 1;
 				hRootItem = TreeView_InsertItem(hTree, &tv);
 			}
 			// 子ノード1
@@ -1880,11 +2006,13 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 				node* n = new node_output(0);
 				if (n) {
 					TV_INSERTSTRUCT tv = { 0 };
-					tv.hInsertAfter = TVI_LAST;
-					tv.item.mask = TVIF_TEXT | TVIF_PARAM;
 					tv.hParent = hRootItem;
-					tv.item.lParam = (LPARAM)n;
+					tv.hInsertAfter = TVI_LAST;
+					tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
 					tv.item.pszText = n->name;
+					tv.item.iImage = 2;
+					tv.item.iSelectedImage = 3;
+					tv.item.lParam = (LPARAM)n;
 					HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
 				}
 			}
@@ -1950,6 +2078,7 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 		if (hTree) {
 			TreeView_DeleteAllItems(hTree);
 		}
+		ImageList_Destroy(hImageList);
 		break;
 	}
 	return FALSE;
@@ -2158,6 +2287,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 		g_c.hPropContainer = CreateDialog(((LPCREATESTRUCT)lParam)->hInstance, MAKEINTRESOURCE(IDD_PROPERTY), hWnd, PropContainerDialogProc);
 
+		{
+			// メニューを設定する
+			HMENU hMenu = GetMenu(hWnd);
+			if (hMenu) {
+				if (g_c.bShowGrid) {
+					CheckMenuItem(hMenu, ID_VIEW_GRID, MF_BYCOMMAND | MFS_CHECKED);
+				}
+			}
+		}
+
 		break;
 	case WM_APP: // 画面DPIが変わった時、ウィンドウ作成時にフォントの生成を行う
 		GetScaling(hWnd, &g_c.uDpiX, &g_c.uDpiY);
@@ -2316,6 +2455,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				pNoCodeApp->OnSave();
 			}
 			break;
+		case ID_VIEW_GRID:
+			{
+				HMENU hMenu = GetMenu(hWnd);
+				if (hMenu) {
+					g_c.bShowGrid = !g_c.bShowGrid;
+					if (g_c.bShowGrid) {
+						CheckMenuItem(hMenu, ID_VIEW_GRID, MF_BYCOMMAND | MFS_CHECKED);
+					}
+					else {
+						CheckMenuItem(hMenu, ID_VIEW_GRID, MF_BYCOMMAND | MFS_UNCHECKED);
+					}
+					if (pNoCodeApp) {
+						pNoCodeApp->OnViewGrid(g_c.bShowGrid);
+					}
+				}
+			}
+			break;
 		}
 		break;
 	case WM_CLOSE:
@@ -2404,12 +2560,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		{FVIRTKEY | FCONTROL, VK_SUBTRACT, ID_SHRINK},
 		{FVIRTKEY | FCONTROL, 'Z', ID_UNDO},
 		{FVIRTKEY | FCONTROL, 'Y', ID_REDO},
-		{FVIRTKEY | FALT, VK_RETURN, ID_PROPERTY},		
+		{FVIRTKEY | FALT, VK_RETURN, ID_PROPERTY},
+		{FVIRTKEY | FCONTROL, VK_F5, ID_RUN},
 	};
 	HACCEL hAccel = CreateAcceleratorTable(Accel, _countof(Accel));
 	while (GetMessage(&msg, 0, 0, 0))
 	{
-		if (!TranslateAccelerator(g_c.hMainWnd, hAccel, &msg)/* && !IsDialogMessage(g_c.hMainWnd, &msg)*/)
+		if (!IsDialogMessage(g_c.hMainWnd, &msg) && !TranslateAccelerator(g_c.hMainWnd, hAccel, &msg))
 		{
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);

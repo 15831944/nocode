@@ -45,5 +45,8 @@
     <Image Include="elekiter.bmp">
       <Filter>リソース ファイル</Filter>
     </Image>
+    <Image Include="treeviewicon.bmp">
+      <Filter>リソース ファイル</Filter>
+    </Image>
   </ItemGroup>
 </Project>

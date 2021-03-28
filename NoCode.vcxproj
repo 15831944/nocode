@@ -173,6 +173,7 @@
     <Image Include="elekiter.bmp" />
     <Image Include="NoCode.ico" />
     <Image Include="toolbar1.bmp" />
+    <Image Include="treeviewicon.bmp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

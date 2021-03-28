@@ -136,6 +136,7 @@ BEGIN
         MENUITEM "拡大(&Z)\tCtrl++",              ID_ZOOM
         MENUITEM "縮小(&S)\tCtrl+-",              ID_SHRINK
         MENUITEM "画面内に収める(&H)\tHome",           ID_HOME
+        MENUITEM "グリッド(&G)",                    ID_VIEW_GRID
     END
     POPUP "実行(&R)"
     BEGIN
@@ -297,6 +298,8 @@ END
 IDR_TOOLBAR1            BITMAP                  "toolbar1.bmp"
 
 IDB_BITMAP1             BITMAP                  "elekiter.bmp"
+
+IDB_BITMAP2             BITMAP                  "treeviewicon.bmp"
 
 
 /////////////////////////////////////////////////////////////////////////////
