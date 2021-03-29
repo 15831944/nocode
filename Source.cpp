@@ -421,7 +421,8 @@ public:
 			dead = generation;
 		}
 	}
-	virtual void paint(const graphic* g, const trans* t, UINT64 generation, const point* offset = nullptr) const = 0;
+	virtual void paint(const graphic* g, const trans* t, bool drawconnectpoint, UINT64 generation, const point* offset = nullptr) const = 0;
+	virtual int hitconnectpoint(const point* p, point* cp, UINT64 generation) const { return 0; }
 	virtual bool hit(const point* p, UINT64 generation) const = 0;
 	virtual bool inrect(const point* p1, const point* p2, UINT64 generation) const = 0;
 	virtual object* copy(UINT64 generation) const = 0;
@@ -451,7 +452,7 @@ public:
 	virtual ~node() {
 	}
 	virtual node* copy(UINT64 generation) const = 0;
-	virtual void paint(const graphic* g, const trans* t, UINT64 generation, const point* offset = nullptr) const {
+	virtual void paint(const graphic* g, const trans* t, bool drawconnectpoint, UINT64 generation, const point* offset = nullptr) const override {
 		if (!isalive(generation)) return;
 		g->m_pRenderTarget->SetTransform(
 			D2D1::Matrix3x2F::Translation((FLOAT)(t->c.w / 2 + t->p.x - t->l.x), (FLOAT)(t->c.h / 2 + t->p.y - t->l.y)) *
@@ -471,8 +472,8 @@ public:
 		g->m_pRenderTarget->DrawRoundedRectangle(&rrect, select ? g->m_pSelectBrush : g->m_pNormalBrush, 2.0f);
 		g->m_pRenderTarget->DrawText(name, lstrlenW(name), g->m_pTextFormat, &rect, select ? g->m_pSelectBrush : g->m_pNormalBrush);
 		g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
-		if (select && offset == nullptr) {
-			drawconnectpoint(g, t, generation);
+		if (drawconnectpoint && select && offset == nullptr) {
+			this->drawconnectpoint(g, t, generation);
 		}
 	}
 	virtual void drawconnectpoint(const graphic* g, const trans* t, UINT64 generation) const {
@@ -495,7 +496,7 @@ public:
 		g->m_pRenderTarget->DrawEllipse(&right1, g->m_pConnectPointBrush);
 		g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 	}
-	virtual int hitconnectpoint(const point* p, UINT64 generation) const { // top->1, bottom->2, left->3, right->4, else->0
+	virtual int hitconnectpoint(const point* p, point* cp, UINT64 generation) const override { // top->1, bottom->2, left->3, right->4, else->0
 		if (isalive(generation)) {
 			D2D1_POINT_2F points[] = {
 				{ (float)this->p.x, (float)(this->p.y - s.h / 2.0) },
@@ -507,6 +508,10 @@ public:
 			for (auto i : points) {
 				index++;
 				if (sqrt((i.x - p->x) * (i.x - p->x) + (i.y - p->y) * (i.y - p->y)) < CONNECT_POINT_WIDTH) {
+					if (cp) {
+						cp->x = i.x;
+						cp->y = i.y;
+					}
 					return index;
 				}
 			}
@@ -532,8 +537,9 @@ public:
 	virtual bool execute() const = 0;
 };
 
+typedef enum { CONNECT_NONE, CONNECT_TOP, CONNECT_BOTTOM, CONNECT_LEFT, CONNECT_RIGHT } CONNECT_POSITION;
+
 class arrow : public object {
-	typedef enum { CONNECT_NONE, CONNECT_TOP, CONNECT_BOTTOM, CONNECT_LEFT, CONNECT_RIGHT} CONNECT_POSITION;
 public:
 	node* start;
 	node* end;
@@ -552,7 +558,7 @@ public:
 		end_pos = src->end_pos;
 	}
 
-	virtual void paint(const graphic* g, const trans* t, UINT64 generation, const point* offset = nullptr) const override { // 書き直す必要あり
+	virtual void paint(const graphic* g, const trans* t, bool drawconnectpoint, UINT64 generation, const point* offset = nullptr) const override { // 書き直す必要あり
 		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)
 			&& start_pos != CONNECT_NONE && end_pos != CONNECT_NONE) {
 			g->m_pRenderTarget->SetTransform(
@@ -824,6 +830,12 @@ public:
 	virtual void open(HANDLE hFile) const {};
 };
 
+struct connectpoint {
+	object* n;
+	point pt;
+	CONNECT_POSITION connect_position;
+};
+
 class objectlist {
 public:
 	std::list<object*> l;
@@ -853,21 +865,41 @@ public:
 		}
 	}
 	void paint(const graphic* g, trans* t, UINT64 generation, point* dragoffset = nullptr) {
+
+		bool drawconnectpoint = (selectcount(generation) == 1);
+
 		for (auto i : l) {
 			if (!i->isselect(generation))
-				i->paint(g, t, generation);
+				i->paint(g, t, drawconnectpoint, generation);
 		}
 		for (auto i : l) {
 			if (i->isselect(generation))
-				i->paint(g, t, generation, dragoffset);
+				i->paint(g, t, drawconnectpoint, generation, dragoffset);
 		}
+	}
+	bool hitconnectpoint(const point* p, connectpoint* out, UINT64 generation, bool all = false) const {
+		if (selectcount(generation) != 1) return 0;
+		for (auto i = l.rbegin(), e = l.rend(); i != e; ++i) {
+			if (!all && !(*i)->isselect(generation)) continue;
+			point pt;
+			int connectpoint = (*i)->hitconnectpoint(p, &pt, generation);
+			if (connectpoint != 0) {
+				if (out) {
+					out->connect_position = (CONNECT_POSITION)connectpoint;
+					out->pt = pt;
+					out->n = *i;
+				}
+				return true;
+			}
+		}
+		return 0;
 	}
 	object* hit(const point* p, UINT64 generation, const object* without = nullptr) const {
 		for (auto i = l.rbegin(), e = l.rend(); i != e; ++i) {
 			if (without != *i && (*i)->hit(p, generation))
 				return *i;
 		}
-		return 0;
+		return nullptr;
 	}
 	void select(const object* n, UINT64 generation) { // 指定した一つのみ選択状態にする
 		for (auto i : l) {
@@ -982,8 +1014,6 @@ public:
 	void open(UINT64 generation) const {};
 };
 
-
-
 enum Mode {
 	none = 0,
 	dragclient = 1,
@@ -1017,6 +1047,9 @@ public:
 	std::list<object*> selectnode;
 	LONG_PTR editkind;
 	WCHAR szFilePath[512];
+	connectpoint cp1 = {};
+	connectpoint cp2 = {};
+
 
 	object* GetFirstSelectObject() const {
 		return nl.getfirstselectobject(generation);
@@ -1138,8 +1171,10 @@ public:
 		point p1{ (double)x, (double)y };
 		point p2;
 		t.d2l(&p1, &p2);
-		dd = nl.hit(&p2, generation);
-		if (dd) {
+		if (nl.hitconnectpoint(&p2, &cp1, generation))
+		{
+			MessageBox(hWnd, 0, 0, 0);
+		} else if ((dd = nl.hit(&p2, generation)) != nullptr) {
 			if (GetKeyState(VK_CONTROL) < 0) {
 				dd->setselect(!nl.isselect(dd, generation), generation); // Ctrlを押されているときは選択を追加
 			}
@@ -1351,7 +1386,7 @@ public:
 					drawgrid(g_c.g, &t);
 				}
 				nl.paint(g_c.g, &t, generation, mode == dragnode ? &dragoffset : nullptr);
-				if (nn) nn->paint(g_c.g, &t, generation);
+				if (nn) nn->paint(g_c.g, &t, false, generation);
 				g_c.g->enddraw();
 			}
 		}
