@@ -13,7 +13,7 @@
 #undef APSTUDIO_READONLY_SYMBOLS
 
 /////////////////////////////////////////////////////////////////////////////
-// “ú–{Œê (“ú–{) resources
+// æ—¥æœ¬èªž (æ—¥æœ¬) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_JPN)
 LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
@@ -101,60 +101,60 @@ IDI_ICON1               ICON                    "NoCode.ico"
 
 IDR_MAIN MENU
 BEGIN
-    POPUP "ƒtƒ@ƒCƒ‹(&F)"
+    POPUP "ãƒ•ã‚¡ã‚¤ãƒ«(&F)"
     BEGIN
-        MENUITEM "V‹Kì¬(&N)\tCtrl+N",            ID_NEW
-        MENUITEM "ŠJ‚­(&O)...\tCtrl+O",           ID_OPEN
-        MENUITEM "•Û‘¶(&S)\tCtrl+S",              ID_SAVE
-        MENUITEM "–¼‘O‚ð•t‚¯‚Ä•Û‘¶(&A)...\tCtrl+Shift+S", ID_SAVEAS
-        MENUITEM "ˆóü(&P)\tCtrl+P",              ID_PRINT
+        MENUITEM "æ–°è¦ä½œæˆ(&N)\tCtrl+N",            ID_NEW
+        MENUITEM "é–‹ã(&O)...\tCtrl+O",           ID_OPEN
+        MENUITEM "ä¿å­˜(&S)\tCtrl+S",              ID_SAVE
+        MENUITEM "åå‰ã‚’ä»˜ã‘ã¦ä¿å­˜(&A)...\tCtrl+Shift+S", ID_SAVEAS
+        MENUITEM "å°åˆ·(&P)\tCtrl+P",              ID_PRINT
         MENUITEM SEPARATOR
-        MENUITEM "I—¹(&X)\tCtrl+W",              ID_EXIT
+        MENUITEM "çµ‚äº†(&X)\tCtrl+W",              ID_EXIT
     END
-    POPUP "•ÒW(&E)"
+    POPUP "ç·¨é›†(&E)"
     BEGIN
-        MENUITEM "Œ³‚É–ß‚·(&U)\tCtrl+Z",            ID_UNDO
-        MENUITEM "‚â‚è’¼‚µ(&R)\tCtrl+Y",            ID_REDO
+        MENUITEM "å…ƒã«æˆ»ã™(&U)\tCtrl+Z",            ID_UNDO
+        MENUITEM "ã‚„ã‚Šç›´ã—(&R)\tCtrl+Y",            ID_REDO
         MENUITEM SEPARATOR
-        MENUITEM "Ø‚èŽæ‚è(&T)\tCtrl+X",            ID_CUT
-        MENUITEM "“\‚è•t‚¯(&P)\tCtrl+V",            ID_PASTE
-        MENUITEM "ƒRƒs[(&C)\tCtrl+C",             ID_COPY
-        MENUITEM "íœ(&D)\tDel",                 ID_DELETE
+        MENUITEM "åˆ‡ã‚Šå–ã‚Š(&T)\tCtrl+X",            ID_CUT
+        MENUITEM "è²¼ã‚Šä»˜ã‘(&P)\tCtrl+V",            ID_PASTE
+        MENUITEM "ã‚³ãƒ”ãƒ¼(&C)\tCtrl+C",             ID_COPY
+        MENUITEM "å‰Šé™¤(&D)\tDel",                 ID_DELETE
         MENUITEM SEPARATOR
-        MENUITEM "‚·‚×‚Ä‘I‘ð(&A)\tCtrl+A",           ID_ALLSELECT
-        MENUITEM "‘I‘ð‰ðœ(&N)\tEsc",               ID_UNSELECT
+        MENUITEM "ã™ã¹ã¦é¸æŠž(&A)\tCtrl+A",           ID_ALLSELECT
+        MENUITEM "é¸æŠžè§£é™¤(&N)\tEsc",               ID_UNSELECT
         MENUITEM SEPARATOR
-        MENUITEM "o—Í‚ðƒNƒŠƒA(&L)",                  40094
-        MENUITEM "Ý’è(&S)...",                   ID_SETTINGS
+        MENUITEM "å‡ºåŠ›ã‚’ã‚¯ãƒªã‚¢(&L)",                  40094
+        MENUITEM "è¨­å®š(&S)...",                   ID_SETTINGS
     END
-    POPUP "•\Ž¦(&V)"
+    POPUP "è¡¨ç¤º(&V)"
     BEGIN
-        MENUITEM "ƒm[ƒh",                         ID_NODE
-        MENUITEM "ƒvƒƒpƒeƒB",                       ID_PROPERTY
-        MENUITEM "o—Í",                          ID_OUTPUT
+        MENUITEM "ãƒŽãƒ¼ãƒ‰",                         ID_NODE
+        MENUITEM "ãƒ—ãƒ­ãƒ‘ãƒ†ã‚£",                       ID_PROPERTY
+        MENUITEM "å‡ºåŠ›",                          ID_OUTPUT
         MENUITEM SEPARATOR
-        MENUITEM "Šg‘å(&Z)\tCtrl++",              ID_ZOOM
-        MENUITEM "k¬(&S)\tCtrl+-",              ID_SHRINK
-        MENUITEM "‰æ–Ê“à‚ÉŽû‚ß‚é(&H)\tHome",           ID_HOME
-        MENUITEM "ƒOƒŠƒbƒh(&G)",                    ID_VIEW_GRID
+        MENUITEM "æ‹¡å¤§(&Z)\tCtrl++",              ID_ZOOM
+        MENUITEM "ç¸®å°(&S)\tCtrl+-",              ID_SHRINK
+        MENUITEM "ç”»é¢å†…ã«åŽã‚ã‚‹(&H)\tHome",           ID_HOME
+        MENUITEM "ã‚°ãƒªãƒƒãƒ‰(&G)",                    ID_VIEW_GRID
     END
-    POPUP "ŽÀs(&R)"
+    POPUP "å®Ÿè¡Œ(&R)"
     BEGIN
-        MENUITEM "ŽÀs(&R)\tF5",                  ID_RUN
-        MENUITEM "‘I‘ðƒm[ƒh‚Ì‚ÝŽÀs(&S)\tShift+F5",     ID_RUNSELECTEDNODE
+        MENUITEM "å®Ÿè¡Œ(&R)\tF5",                  ID_RUN
+        MENUITEM "é¸æŠžãƒŽãƒ¼ãƒ‰ã®ã¿å®Ÿè¡Œ(&S)\tShift+F5",     ID_RUNSELECTEDNODE
         MENUITEM SEPARATOR
-        MENUITEM "ƒXƒeƒbƒvŽÀs(&S)\tF10",             ID_STEP
-        MENUITEM "ƒuƒŒ[ƒNƒ|ƒCƒ“ƒg(&B)\tF9",            ID_BREAKPOINT
+        MENUITEM "ã‚¹ãƒ†ãƒƒãƒ—å®Ÿè¡Œ(&S)\tF10",             ID_STEP
+        MENUITEM "ãƒ–ãƒ¬ãƒ¼ã‚¯ãƒã‚¤ãƒ³ãƒˆ(&B)\tF9",            ID_BREAKPOINT
     END
-    POPUP "ƒwƒ‹ƒv(&H)"
+    POPUP "ãƒ˜ãƒ«ãƒ—(&H)"
     BEGIN
-        MENUITEM "ƒwƒ‹ƒv‚Ì•\Ž¦",                      ID_HELP
+        MENUITEM "ãƒ˜ãƒ«ãƒ—ã®è¡¨ç¤º",                      ID_HELP
         MENUITEM SEPARATOR
-        MENUITEM "ƒtƒB[ƒhƒoƒbƒN‚Ì‘—M(&F)",              ID_FEEDBACK
+        MENUITEM "ãƒ•ã‚£ãƒ¼ãƒ‰ãƒãƒƒã‚¯ã®é€ä¿¡(&F)",              ID_FEEDBACK
         MENUITEM SEPARATOR
-        MENUITEM "XVƒvƒƒOƒ‰ƒ€‚ÌŠm”F(&U)",              ID_UPDATE
+        MENUITEM "æ›´æ–°ãƒ—ãƒ­ã‚°ãƒ©ãƒ ã®ç¢ºèª(&U)",              ID_UPDATE
         MENUITEM SEPARATOR
-        MENUITEM "ƒo[ƒWƒ‡ƒ“î•ñ(&A)",                 ID_ABOUT
+        MENUITEM "ãƒãƒ¼ã‚¸ãƒ§ãƒ³æƒ…å ±(&A)",                 ID_ABOUT
     END
 END
 
@@ -162,15 +162,15 @@ IDR_NODEPOPUP MENU
 BEGIN
     POPUP "POPUP"
     BEGIN
-        MENUITEM "ƒRƒs[(&C)\tCtrl+C",             0
-        MENUITEM "Ø‚èŽæ‚è(&X)\tCtrl+X",            0
-        MENUITEM "íœ(&D)\tDel",                 ID_DELETE
+        MENUITEM "ã‚³ãƒ”ãƒ¼(&C)\tCtrl+C",             0
+        MENUITEM "åˆ‡ã‚Šå–ã‚Š(&X)\tCtrl+X",            0
+        MENUITEM "å‰Šé™¤(&D)\tDel",                 ID_DELETE
         MENUITEM SEPARATOR
-        MENUITEM "ŽÀs(&R)",                      ID_RUN
+        MENUITEM "å®Ÿè¡Œ(&R)",                      ID_RUN
         MENUITEM SEPARATOR
-        MENUITEM "‚¨‹C‚É“ü‚è‚É“o˜^(&F)\tCtrl+F",        0
+        MENUITEM "ãŠæ°—ã«å…¥ã‚Šã«ç™»éŒ²(&F)\tCtrl+F",        0
         MENUITEM SEPARATOR
-        MENUITEM "ƒvƒƒpƒeƒB(&P)\tAlt+Enter",        ID_POPUP_40093
+        MENUITEM "ãƒ—ãƒ­ãƒ‘ãƒ†ã‚£(&P)\tAlt+Enter",        ID_POPUP_40093
     END
 END
 
@@ -178,9 +178,9 @@ IDR_CLIENTPOPUP MENU
 BEGIN
     POPUP "POPUP"
     BEGIN
-        MENUITEM "ƒNƒ‰ƒCƒAƒ“ƒg",                      ID_POPUP_40064
-        MENUITEM "“\‚è•t‚¯",                        ID_POPUP_40095
-        MENUITEM "‚·‚×‚Ä‘I‘ð(&A)\tCtrl+A",           ID_POPUP_40096
+        MENUITEM "ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆ",                      ID_POPUP_40064
+        MENUITEM "è²¼ã‚Šä»˜ã‘",                        ID_POPUP_40095
+        MENUITEM "ã™ã¹ã¦é¸æŠž(&A)\tCtrl+A",           ID_POPUP_40096
     END
 END
 
@@ -206,14 +206,14 @@ IDD_PROPERTY_MULTI DIALOGEX 0, 0, 194, 79
 STYLE DS_SETFONT | WS_CHILD | WS_VISIBLE
 FONT 20, "Yu Gothic UI", 400, 0, 0x80
 BEGIN
-    LTEXT           "•¡”‘I‘ð",IDC_STATIC,0,0,172,70
+    LTEXT           "è¤‡æ•°é¸æŠž",IDC_STATIC,0,0,172,70
 END
 
 IDD_PROPERTY_NONE DIALOGEX 0, 0, 301, 138
 STYLE DS_SETFONT | WS_CHILD | WS_VISIBLE
 FONT 20, "Yu Gothic UI", 400, 0, 0x80
 BEGIN
-    LTEXT           "ƒm[ƒh‚ª‘I‘ð‚³‚ê‚Ä‚¢‚Ü‚¹‚ñB",IDC_STATIC,0,0,301,50
+    LTEXT           "ãƒŽãƒ¼ãƒ‰ãŒé¸æŠžã•ã‚Œã¦ã„ã¾ã›ã‚“ã€‚",IDC_STATIC,0,0,301,50
 END
 
 IDD_NODEBOX DIALOGEX 0, 0, 5, 5
@@ -239,21 +239,21 @@ END
 
 IDD_ABOUT DIALOGEX 128, 64, 363, 144
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "ƒo[ƒWƒ‡ƒ“î•ñ"
+CAPTION "ãƒãƒ¼ã‚¸ãƒ§ãƒ³æƒ…å ±"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     DEFPUSHBUTTON   "OK",IDOK,307,125,50,14
-    LTEXT           "ƒo[ƒWƒ‡ƒ“î•ñ",IDC_STATIC,11,100,42,8
+    LTEXT           "ãƒãƒ¼ã‚¸ãƒ§ãƒ³æƒ…å ±",IDC_STATIC,11,100,42,8
 END
 
 IDD_SETTINGS DIALOGEX 0, 0, 310, 176
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "Ý’è"
+CAPTION "è¨­å®š"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     DEFPUSHBUTTON   "OK",IDOK,199,155,50,14
-    PUSHBUTTON      "ƒLƒƒƒ“ƒZƒ‹",IDCANCEL,253,155,50,14
-    GROUPBOX        "F",IDC_STATIC,7,7,296,63
+    PUSHBUTTON      "ã‚­ãƒ£ãƒ³ã‚»ãƒ«",IDCANCEL,253,155,50,14
+    GROUPBOX        "è‰²",IDC_STATIC,7,7,296,63
     COMBOBOX        IDC_COMBO1,24,21,48,30,CBS_DROPDOWN | CBS_SORT | WS_VSCROLL | WS_TABSTOP
 END
 
@@ -410,7 +410,7 @@ BEGIN
     0
 END
 
-#endif    // “ú–{Œê (“ú–{) resources
+#endif    // æ—¥æœ¬èªž (æ—¥æœ¬) resources
 /////////////////////////////////////////////////////////////////////////////
 
 
