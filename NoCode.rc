@@ -243,7 +243,6 @@ CAPTION "バージョン情報"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     DEFPUSHBUTTON   "OK",IDOK,307,125,50,14
-    CONTROL         IDB_BITMAP1,IDC_STATIC,"Static",SS_BITMAP,0,0,363,93
     LTEXT           "バージョン情報",IDC_STATIC,11,100,42,8
 END
 
@@ -296,8 +295,6 @@ END
 //
 
 IDR_TOOLBAR1            BITMAP                  "toolbar1.bmp"
-
-IDB_BITMAP1             BITMAP                  "elekiter.bmp"
 
 IDB_BITMAP2             BITMAP                  "treeviewicon.bmp"
 

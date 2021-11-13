@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ で生成されたインクルード ファイル。
-// NoCode.rc で使用
+// nocode.rc で使用
 //
 #define IDI_ICON1                       101
 #define IDR_MENU1                       102
@@ -16,7 +16,6 @@
 #define IDD_OUTPUT                      111
 #define IDD_VARIABLE_LIST               112
 #define IDD_ABOUT                       113
-#define IDB_BITMAP1                     114
 #define IDD_SETTINGS                    116
 #define IDB_BITMAP2                     118
 #define IDC_COMBO1                      1010

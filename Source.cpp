@@ -40,7 +40,7 @@
 #define ZOOM_STEP 1.20
 #define CONNECT_POINT_WIDTH 8.0f
 
-WCHAR szClassName[] = L"Elekiter";
+WCHAR szClassName[] = L"nocode";
 HHOOK g_hHook;
 WNDPROC DefaultRichEditProc;
 LRESULT CALLBACK RichEditProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -2517,7 +2517,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 	case WM_NCCREATE:
 		{
-			const HMODULE hModUser32 = GetModuleHandleW(L"user32.dll");
+			const HMODULE hModUser32 = GetModuleHandleW(L"user32");
 			if (hModUser32)
 			{
 				typedef BOOL(WINAPI* fnTypeEnableNCScaling)(HWND);
@@ -2547,7 +2547,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	return 0;
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int nCmdShow)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPWSTR pCmdLine, int nCmdShow)
 {
 #if _DEBUG
 	_CrtSetDbgFlag(_CRTDBG_LEAK_CHECK_DF | _CRTDBG_ALLOC_MEM_DF);
@@ -2570,7 +2570,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 	RegisterClass(&wndclass);
 	g_c.hMainWnd = CreateWindowW(
 		szClassName,
-		L"Elekiter",
+		L"nocode",
 		WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
 		CW_USEDEFAULT,
 		0,
