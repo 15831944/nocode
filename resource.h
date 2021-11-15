@@ -19,6 +19,11 @@
 #define IDD_SETTINGS                    116
 #define IDB_BITMAP2                     118
 #define IDC_COMBO1                      1010
+#define IDC_VERSION                     1011
+#define IDC_COPYRIGHT                   1012
+#define IDC_BUTTON1                     1013
+#define IDC_COPYRIGHT2                  1014
+#define IDC_LICENSE                     1014
 #define ID_40001                        40001
 #define ID_40002                        40002
 #define ID_40003                        40003
@@ -102,7 +107,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        119
 #define _APS_NEXT_COMMAND_VALUE         40101
-#define _APS_NEXT_CONTROL_VALUE         1011
+#define _APS_NEXT_CONTROL_VALUE         1014
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

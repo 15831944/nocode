@@ -159,11 +159,39 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="app.cpp" />
+    <ClCompile Include="arrow.cpp" />
+    <ClCompile Include="common.cpp" />
+    <ClCompile Include="connectpoint.cpp" />
+    <ClCompile Include="graphic.cpp" />
+    <ClCompile Include="mode.cpp" />
+    <ClCompile Include="node.cpp" />
+    <ClCompile Include="object.cpp" />
+    <ClCompile Include="objectlist.cpp" />
+    <ClCompile Include="point.cpp" />
+    <ClCompile Include="propertyitem.cpp" />
+    <ClCompile Include="propertyitemlist.cpp" />
+    <ClCompile Include="size.cpp" />
     <ClCompile Include="Source.cpp" />
+    <ClCompile Include="trans.cpp" />
     <ClCompile Include="util.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="app.h" />
+    <ClInclude Include="arrow.h" />
+    <ClInclude Include="common.h" />
+    <ClInclude Include="connectpoint.h" />
+    <ClInclude Include="graphic.h" />
+    <ClInclude Include="mode.h" />
+    <ClInclude Include="node.h" />
+    <ClInclude Include="object.h" />
+    <ClInclude Include="objectlist.h" />
+    <ClInclude Include="point.h" />
+    <ClInclude Include="propertyitem.h" />
+    <ClInclude Include="propertyitemlist.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="size.h" />
+    <ClInclude Include="trans.h" />
     <ClInclude Include="util.h" />
   </ItemGroup>
   <ItemGroup>

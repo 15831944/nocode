@@ -1,5 +1,6 @@
 #include <windows.h>
 #include "util.h"
+#include "common.h"
 
 void util::DrawArrow(HDC hdc, const POINT* p1, const POINT* p2, const double* z)
 {
@@ -55,3 +56,54 @@ void util::ClipOrCenterRectToMonitor(LPRECT prc, UINT flags)
         prc->bottom = prc->top + h;
     }
 }
+
+BOOL util::GetScaling(HWND hWnd, UINT* pnX, UINT* pnY)
+{
+	BOOL bSetScaling = FALSE;
+	const HMONITOR hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+	if (hMonitor)
+	{
+		HMODULE hShcore = LoadLibraryW(L"SHCORE");
+		if (hShcore)
+		{
+			typedef HRESULT __stdcall GetDpiForMonitor(HMONITOR, int, UINT*, UINT*);
+			GetDpiForMonitor* fnGetDpiForMonitor = reinterpret_cast<GetDpiForMonitor*>(GetProcAddress(hShcore, "GetDpiForMonitor"));
+			if (fnGetDpiForMonitor)
+			{
+				UINT uDpiX, uDpiY;
+				if (SUCCEEDED(fnGetDpiForMonitor(hMonitor, 0, &uDpiX, &uDpiY)) && uDpiX > 0 && uDpiY > 0)
+				{
+					*pnX = uDpiX;
+					*pnY = uDpiY;
+					bSetScaling = TRUE;
+				}
+			}
+			FreeLibrary(hShcore);
+		}
+	}
+	if (!bSetScaling)
+	{
+		HDC hdc = GetDC(NULL);
+		if (hdc)
+		{
+			*pnX = GetDeviceCaps(hdc, LOGPIXELSX);
+			*pnY = GetDeviceCaps(hdc, LOGPIXELSY);
+			ReleaseDC(NULL, hdc);
+			bSetScaling = TRUE;
+		}
+	}
+	if (!bSetScaling)
+	{
+		*pnX = DEFAULT_DPI;
+		*pnY = DEFAULT_DPI;
+		bSetScaling = TRUE;
+	}
+	return bSetScaling;
+}
+
+BOOL CALLBACK util::EnumChildSetFontProc(HWND hWnd, LPARAM lParam)
+{
+	SendMessage(hWnd, WM_SETFONT, (WPARAM)g_c.hUIFont, TRUE);
+	return TRUE;
+}
+
