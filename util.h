@@ -14,5 +14,6 @@ public:
 	static void ClipOrCenterRectToMonitor(LPRECT prc, UINT flags);
 	static BOOL GetScaling(HWND hWnd, UINT* pnX, UINT* pnY);
 	static BOOL CALLBACK EnumChildSetFontProc(HWND hWnd, LPARAM lParam);
+	static WNDPROC DefaultRichEditProc;
 };
 

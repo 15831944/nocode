@@ -20,7 +20,6 @@
 #define DRAGJUDGEWIDTH POINT2PIXEL(4)
 #define GRID_WIDTH 25
 
-WNDPROC DefaultRichEditProc;
 LRESULT CALLBACK RichEditProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 class app {
@@ -648,7 +647,7 @@ public:
 								SendMessage(hEdit, EM_SETEDITSTYLE, SES_EMULATESYSEDIT, SES_EMULATESYSEDIT);
 								SendMessage(hEdit, EM_SETEVENTMASK, 0, ENM_UPDATE);
 								SendMessage(hEdit, EM_LIMITTEXT, -1, 0);
-								DefaultRichEditProc = (WNDPROC)SetWindowLongPtr(hEdit, GWLP_WNDPROC, (LONG_PTR)RichEditProc);
+								util::DefaultRichEditProc = (WNDPROC)SetWindowLongPtr(hEdit, GWLP_WNDPROC, (LONG_PTR)RichEditProc);
 								SetWindowText(hEdit, (i->value) ? (i->value->c_str()) : 0);
 							}
 							CreateWindowEx(0, L"STATIC", (i->unit) ? (i->unit->c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, POINT2PIXEL(64 + 128 + 32), nYtop, POINT2PIXEL(32), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
@@ -661,7 +660,7 @@ public:
 								SendMessage(hEdit, EM_SETEDITSTYLE, SES_EMULATESYSEDIT, SES_EMULATESYSEDIT);
 								SendMessage(hEdit, EM_SETEVENTMASK, 0, ENM_UPDATE);
 								SendMessage(hEdit, EM_LIMITTEXT, -1, 0);
-								DefaultRichEditProc = (WNDPROC)SetWindowLongPtr(hEdit, GWLP_WNDPROC, (LONG_PTR)RichEditProc);
+								util::DefaultRichEditProc = (WNDPROC)SetWindowLongPtr(hEdit, GWLP_WNDPROC, (LONG_PTR)RichEditProc);
 								SetWindowText(hEdit, (i->value) ? (i->value->c_str()) : 0);
 							}
 							nYtop += POINT2PIXEL(32 + 256 + 25);

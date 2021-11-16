@@ -115,7 +115,7 @@ LRESULT CALLBACK RichEditProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			ShowWindow(g_c.hList, SW_HIDE);
 		}
 		{
-			const LONG_PTR ret = CallWindowProc(DefaultRichEditProc, hWnd, msg, wParam, lParam);
+			const LONG_PTR ret = CallWindowProc(util::DefaultRichEditProc, hWnd, msg, wParam, lParam);
 			HWND hParent = GetParent(hWnd);
 			if (hParent) {
 				int id = GetWindowLong(hWnd, GWL_ID);
@@ -137,7 +137,7 @@ LRESULT CALLBACK RichEditProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_PAINT:
 		{
 			HideCaret(hWnd);
-			CallWindowProc(DefaultRichEditProc, hWnd, msg, wParam, lParam);
+			CallWindowProc(util::DefaultRichEditProc, hWnd, msg, wParam, lParam);
 			RECT rect;
 			SendMessage(hWnd, EM_GETRECT, 0, (LPARAM)&rect);
 			LONG_PTR eax = SendMessage(hWnd, EM_CHARFROMPOS, 0, (LPARAM)&rect);
@@ -196,7 +196,7 @@ LRESULT CALLBACK RichEditProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	default:
 		break;
 	}
-	return CallWindowProc(DefaultRichEditProc, hWnd, msg, wParam, lParam);
+	return CallWindowProc(util::DefaultRichEditProc, hWnd, msg, wParam, lParam);
 }
 
 WNDPROC DefaultListWndProc;

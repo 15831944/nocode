@@ -2,6 +2,8 @@
 #include "util.h"
 #include "common.h"
 
+WNDPROC  util::DefaultRichEditProc;
+
 void util::DrawArrow(HDC hdc, const POINT* p1, const POINT* p2, const double* z)
 {
 	MoveToEx(hdc, p1->x, p1->y, 0);
