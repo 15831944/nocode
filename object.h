@@ -69,7 +69,7 @@ public:
 	}
 	virtual void paint(const graphic* g, const trans* t, bool drawconnectpoint, UINT64 generation, const point* offset = nullptr) const = 0;
 	virtual int hitconnectpoint(const point* p, point* cp, UINT64 generation) const { return 0; }
-	virtual bool hit(const point* p, UINT64 generation) const = 0;
+	virtual bool hit(const graphic* g, const point* p, UINT64 generation) const = 0;
 	virtual bool inrect(const point* p1, const point* p2, UINT64 generation) const = 0;
 	virtual object* copy(UINT64 generation) const = 0;
 	virtual void move(const point* pt) {

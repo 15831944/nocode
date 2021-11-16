@@ -86,7 +86,7 @@ public:
 		}
 		return 0;
 	}
-	virtual bool hit(const point* p, UINT64 generation) const {
+	virtual bool hit(const graphic* g, const point* p, UINT64 generation) const {
 		return
 			isalive(generation) &&
 			p->x >= this->p.x - s.w / 2 &&

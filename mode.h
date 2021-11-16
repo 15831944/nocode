@@ -6,4 +6,6 @@ enum Mode {
 	dragnode = 2,
 	rectselect = 3,
 	rdown = 4,
+	connection = 5,
+
 };

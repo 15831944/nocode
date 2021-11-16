@@ -43,7 +43,8 @@ public:
 	WCHAR szFilePath[512];
 	connectpoint cp1 = {};
 	connectpoint cp2 = {};
-
+	point pt1;
+	point pt2;
 
 	object* GetFirstSelectObject() const {
 		return nl.getfirstselectobject(generation);
@@ -101,6 +102,10 @@ public:
 		, selectnode{}
 		, editkind(-1)
 		, szFilePath{}
+	{
+	}
+
+	~app()
 	{
 	}
 
@@ -166,10 +171,13 @@ public:
 		point p2;
 		t.d2l(&p1, &p2);
 		if (nl.hitconnectpoint(&p2, &cp1, generation))
-		{
-			MessageBox(hWnd, 0, 0, 0);
+		{			
+			pt1 = cp1.pt;
+			pt2 = cp1.pt;
+			mode = connection;
+			//MessageBox(hWnd, 0, 0, 0);
 		}
-		else if ((dd = nl.hit(&p2, generation)) != nullptr) {
+		else if ((dd = nl.hit(g_c.g, &p2, generation)) != nullptr) {
 			if (GetKeyState(VK_CONTROL) < 0) {
 				dd->setselect(!nl.isselect(dd, generation), generation); // Ctrl‚ð‰Ÿ‚³‚ê‚Ä‚¢‚é‚Æ‚«‚Í‘I‘ð‚ð’Ç‰Á
 			}
@@ -219,6 +227,22 @@ public:
 		else if (mode == rectselect) {
 			selectnode.clear();
 		}
+		else if (mode == connection)
+		{
+			point p1{ (double)x, (double)y };
+			point p2;
+			t.d2l(&p1, &p2);
+			if (nl.hitconnectpoint(&p2, &cp2, generation))
+			{
+				beginedit();
+				nl.unselect(generation);
+				arrow* aa = new arrow(generation);
+				aa->start = (node*)cp1.n;
+				aa->end = (node*)cp2.n;
+				aa->select = true;
+				nl.add(aa);
+			}
+		}
 		mode = none;
 		ReleaseCapture();
 		InvalidateRect(hWnd, NULL, FALSE);
@@ -240,7 +264,7 @@ public:
 		point p1{ (double)x, (double)y };
 		point p2;
 		t.d2l(&p1, &p2);
-		dd = nl.hit(&p2, generation);
+		dd = nl.hit(g_c.g, &p2, generation);
 		if (dd) {
 			if (!nl.isselect(dd, generation)) {
 				nl.select(dd, generation); // ‘I‘ð‚³‚ê‚Ä‚¢‚È‚¢‚Æ‚«‚Í1‚Â‘I‘ð‚·‚é
@@ -267,7 +291,7 @@ public:
 				point p1{ (double)x, (double)y };
 				point p2;
 				t.d2l(&p1, &p2);
-				object* dd2 = nl.hit(&p2, generation);
+				object* dd2 = nl.hit(g_c.g, &p2, generation);
 				if (dd != dd2) {
 					beginedit();
 					nl.unselect(generation);
@@ -356,6 +380,26 @@ public:
 				ReleaseDC(hWnd, hdc);
 			}
 		}
+		else if (mode == connection)
+		{
+			point p1{ (double)x, (double)y };
+			point p2;
+			t.d2l(&p1, &p2);
+
+			object* dd = nl.hit(g_c.g, &p2, generation);
+			if (dd)
+			{
+				dd->setselect(true, generation);
+			}
+			else
+			{
+
+			}
+
+
+			pt2 = p2;
+			InvalidateRect(hWnd, NULL, FALSE);
+		}
 	}
 
 	void OnMouseWheel(int delta) {
@@ -383,6 +427,17 @@ public:
 				}
 				nl.paint(g_c.g, &t, generation, mode == dragnode ? &dragoffset : nullptr);
 				if (nn) nn->paint(g_c.g, &t, false, generation);
+				if (mode == connection)
+				{
+					g_c.g->m_pRenderTarget->SetTransform(
+						D2D1::Matrix3x2F::Translation((FLOAT)(t.c.w / 2 + t.p.x - t.l.x), (FLOAT)(t.c.h / 2 + t.p.y - t.l.y)) *
+						D2D1::Matrix3x2F::Scale((FLOAT)t.z, (FLOAT)t.z, D2D1::Point2F((FLOAT)(t.c.w / 2 + t.p.x), (FLOAT)(t.c.h / 2 + t.p.y)))
+					);
+					D2D1_POINT_2F s = { (float)pt1.x, (float)pt1.y };
+					D2D1_POINT_2F e = { (float)pt2.x, (float)pt2.y };
+					g_c.g->m_pRenderTarget->DrawLine(s, e, g_c.g->m_pSelectBkBrush, 4.0f);
+					g_c.g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
+				}
 				g_c.g->enddraw();
 			}
 		}

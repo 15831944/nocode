@@ -62,9 +62,9 @@ public:
 		}
 		return 0;
 	}
-	object* hit(const point* p, UINT64 generation, const object* without = nullptr) const {
+	object* hit(const graphic* g, const point* p, UINT64 generation, const object* without = nullptr) const {
 		for (auto i = l.rbegin(), e = l.rend(); i != e; ++i) {
-			if (without != *i && (*i)->hit(p, generation))
+			if (without != *i && (*i)->hit(g, p, generation))
 				return *i;
 		}
 		return nullptr;

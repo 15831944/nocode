@@ -3,7 +3,6 @@
 #include "object.h"
 #include "node.h"
 #include "connectpoint.h"
-#include "common.h"
 
 class arrow : public object {
 public:
@@ -33,44 +32,23 @@ public:
 			);
 			D2D1_POINT_2F c1, c2, c3, c4;
 			D2D1_POINT_2F t1, t2, t3;
-			if (abs(start->p.x - end->p.x) - NODE_WIDTH < abs(start->p.y - end->p.y) - NODE_HEIGHT) {
-				// たて⇔たて
-				if (start->p.y < end->p.y) {
-					c1 = { (float)(start->p.x + (offset ? offset->x : 0.0)), (float)(start->p.y + NODE_HEIGHT / 2.0 + (offset ? offset->y : 0.0)) };
-					c4 = { (float)(end->p.x + (offset ? offset->x : 0.0)), (float)(end->p.y - NODE_HEIGHT / 2.0 - nArrowSize - 5.0f + (offset ? offset->y : 0.0)) };
-					t1 = { c4.x, c4.y + nArrowSize };
-					t2 = { t1.x - nArrowWidth,t1.y - nArrowSize };
-					t3 = { t1.x + nArrowWidth,t1.y - nArrowSize };
-				}
-				else {
-					c4 = { (float)(start->p.x + (offset ? offset->x : 0.0)), (float)(start->p.y - NODE_HEIGHT / 2.0 + (offset ? offset->y : 0.0)) };
-					c1 = { (float)(end->p.x + (offset ? offset->x : 0.0)), (float)(end->p.y + NODE_HEIGHT / 2.0 + nArrowSize + 5.0f + (offset ? offset->y : 0.0)) };
-					t1 = { c1.x, c1.y - nArrowSize };
-					t2 = { t1.x - nArrowWidth,t1.y + nArrowSize };
-					t3 = { t1.x + nArrowWidth,t1.y + nArrowSize };
-				}
-				c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
-				c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
+			// たて⇔たて
+			if (start->p.y < end->p.y) {
+				c1 = { (float)(start->p.x + (offset ? offset->x : 0.0)), (float)(start->p.y + NODE_HEIGHT / 2.0 + (offset ? offset->y : 0.0)) };
+				c4 = { (float)(end->p.x + (offset ? offset->x : 0.0)), (float)(end->p.y - NODE_HEIGHT / 2.0 - nArrowSize - 5.0f + (offset ? offset->y : 0.0)) };
+				t1 = { c4.x, c4.y + nArrowSize };
+				t2 = { t1.x - nArrowWidth,t1.y - nArrowSize };
+				t3 = { t1.x + nArrowWidth,t1.y - nArrowSize };
 			}
 			else {
-				// よこ⇔よこ
-				if (start->p.x < end->p.x) {
-					c1 = { (float)(start->p.x + NODE_WIDTH / 2.0 + (offset ? offset->x : 0.0)), (float)(start->p.y + (offset ? offset->y : 0.0)) };
-					c4 = { (float)(end->p.x - NODE_WIDTH / 2.0 - nArrowSize - 5.0f + (offset ? offset->x : 0.0)), (float)(end->p.y + (offset ? offset->y : 0.0)) };
-					t1 = { c4.x + nArrowSize, c4.y };
-					t2 = { t1.x - nArrowSize,t1.y + nArrowWidth };
-					t3 = { t1.x - nArrowSize,t1.y - nArrowWidth };
-				}
-				else {
-					c4 = { (float)(start->p.x - NODE_WIDTH / 2.0 + (offset ? offset->x : 0.0)), (float)(start->p.y + (offset ? offset->y : 0.0)) };
-					c1 = { (float)(end->p.x + NODE_WIDTH / 2.0 + nArrowSize + 5.0f + (offset ? offset->x : 0.0)), (float)(end->p.y + (offset ? offset->y : 0.0)) };
-					t1 = { c1.x - nArrowSize, c1.y };
-					t2 = { t1.x + nArrowSize,t1.y + nArrowWidth };
-					t3 = { t1.x + nArrowSize,t1.y - nArrowWidth };
-				}
-				c2 = { (float)((3.0 * c4.x + c1.x) / 4.0),  c1.y };
-				c3 = { (float)((3.0 * c1.x + c4.x) / 4.0), c4.y };
+				c4 = { (float)(start->p.x + (offset ? offset->x : 0.0)), (float)(start->p.y - NODE_HEIGHT / 2.0 + (offset ? offset->y : 0.0)) };
+				c1 = { (float)(end->p.x + (offset ? offset->x : 0.0)), (float)(end->p.y + NODE_HEIGHT / 2.0 + nArrowSize + 5.0f + (offset ? offset->y : 0.0)) };
+				t1 = { c1.x, c1.y - nArrowSize };
+				t2 = { t1.x - nArrowWidth,t1.y + nArrowSize };
+				t3 = { t1.x + nArrowWidth,t1.y + nArrowSize };
 			}
+			c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
+			c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
 			ID2D1PathGeometry* pPathGeometry;
 			g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
 			if (pPathGeometry) {
@@ -103,7 +81,7 @@ public:
 			g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 		}
 	}
-	virtual bool hit(const point* p, UINT64 generation) const override { // 書き直す必要あり
+	virtual bool hit(const graphic* g, const point* p, UINT64 generation) const override { // 書き直す必要あり
 		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)) {
 			D2D1_POINT_2F c1 = {
 				(float)(start->p.x),
@@ -122,7 +100,7 @@ public:
 				(float)(end->p.y)
 			};
 			ID2D1PathGeometry* pPathGeometry;
-			g_c.g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
+			g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
 			ID2D1GeometrySink* pSink;
 			pPathGeometry->Open(&pSink);
 			pSink->SetFillMode(D2D1_FILL_MODE_WINDING);
