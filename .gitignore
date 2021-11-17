@@ -339,3 +339,4 @@ ASALocalRun/
 # BeatPulse healthcheck temp database
 healthchecksdb
 *.filters
+/nocode/Media/SINGLE_EXE_IMAGE
