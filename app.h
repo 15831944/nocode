@@ -38,7 +38,7 @@ public:
 	object* nn; // 新規作成ノード
 	UINT64 generation;
 	UINT64 maxgeneration;
-	std::list<object*> selectnode;
+	std::vector<object*> selectnode;
 	LONG_PTR editkind;
 	WCHAR szFilePath[512];
 	connectpoint cp1 = {};
@@ -51,7 +51,6 @@ public:
 	}
 
 	void RefreshToolBar() {
-
 		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_UNDO, CanUndo());
 		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_REDO, CanRedo());
 		bool selected = nl.selectcount(generation) > 0;
@@ -184,6 +183,7 @@ public:
 			else if (!dd->isselect(generation)/*!l.isselect(dd, generation)*/) {
 				nl.select(dd, generation); // 選択されていないときは1つ選択する
 			}
+			RefreshToolBar();
 			OnProperty();
 			dragstartP = { x, y };
 			dragstartL = p2;
@@ -232,15 +232,33 @@ public:
 			point p1{ (double)x, (double)y };
 			point p2;
 			t.d2l(&p1, &p2);
-			if (nl.hitconnectpoint(&p2, &cp2, generation))
+			if ((dd = nl.hit(g_c.g, &p2, generation)) != nullptr)
 			{
-				beginedit();
-				nl.unselect(generation);
-				arrow* aa = new arrow(generation);
-				aa->start = (node*)cp1.n;
-				aa->end = (node*)cp2.n;
-				aa->select = true;
-				nl.add(aa);
+				bool bExistSameArrow = false;
+				for (auto i : nl.l)
+				{
+					if (i->isalive(generation) && i->kind == OBJECT_ARROW)
+					{
+						arrow* a = (arrow*)i;
+						if (a->start == (node*)cp1.n &&
+							a->end == (node*)dd)
+						{
+							bExistSameArrow = true;
+							break;
+						}
+					}
+				}
+				if (!bExistSameArrow) {
+					beginedit();
+					nl.unselect(generation);
+					arrow* newarrow = new arrow(generation);
+					newarrow->start = (node*)cp1.n;
+					newarrow->start_pos = cp1.connect_position;
+					newarrow->end = (node*)dd;
+					newarrow->end_pos = CONNECT_TOP;
+					newarrow->select = true;
+					nl.add(newarrow);
+				}
 			}
 		}
 		mode = none;
@@ -354,7 +372,6 @@ public:
 			{
 				dragjudge = true;
 			}
-			RefreshToolBar();
 			InvalidateRect(hWnd, NULL, FALSE);
 		}
 		else if (mode == rectselect) {
@@ -391,11 +408,6 @@ public:
 			{
 				dd->setselect(true, generation);
 			}
-			else
-			{
-
-			}
-
 
 			pt2 = p2;
 			InvalidateRect(hWnd, NULL, FALSE);
@@ -425,7 +437,7 @@ public:
 				if (g_c.bShowGrid) {
 					drawgrid(g_c.g, &t);
 				}
-				nl.paint(g_c.g, &t, generation, mode == dragnode ? &dragoffset : nullptr);
+				nl.paint(g_c.g, &t, generation, (mode == connection) ? true : false, mode == dragnode ? &dragoffset : nullptr);
 				if (nn) nn->paint(g_c.g, &t, false, generation);
 				if (mode == connection)
 				{
@@ -785,7 +797,7 @@ public:
 
 	void UpdateSelectNode(int index, const propertyitem* pi, LONG_PTR editkind = -1) {
 		bool firstedit = beginedit(editkind);
-		std::list<object*> selectnode;
+		std::vector<object*> selectnode;
 		nl.selectlistup(&selectnode, generation);
 		for (auto i : selectnode) {
 			object* newnode = i;
@@ -828,7 +840,7 @@ public:
 			return NODE_MULTI;
 		if (selcount == 0)
 			return NODE_NONE;
-		std::list<object*> selectnode;
+		std::vector<object*> selectnode;
 		nl.selectlistup(&selectnode, generation);
 		for (auto i : selectnode) {
 			n = i;

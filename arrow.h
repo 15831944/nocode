@@ -14,9 +14,9 @@ public:
 	const float nArrowSize = 16.0;
 	const float nArrowWidth = 8.0;
 
-	arrow(UINT64 initborn) : object(initborn), start(0), end(0), start_pos(CONNECT_NONE), end_pos(CONNECT_NONE) {}
+	arrow(UINT64 initborn) : object(initborn, OBJECT_ARROW), start(0), end(0), start_pos(CONNECT_NONE), end_pos(CONNECT_NONE) {}
 
-	arrow(const arrow* src, UINT64 initborn) : object(initborn) {
+	arrow(const arrow* src, UINT64 initborn) : object(initborn, OBJECT_ARROW) {
 		start = src->start;
 		end = src->end;
 		start_pos = src->start_pos;
@@ -50,6 +50,7 @@ public:
 			c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
 			c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
 			ID2D1PathGeometry* pPathGeometry;
+			// ü•ª‚Ì•`‰æ
 			g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
 			if (pPathGeometry) {
 				ID2D1GeometrySink* pSink;
@@ -63,6 +64,7 @@ public:
 				g->m_pRenderTarget->DrawGeometry(pPathGeometry, select ? g->m_pSelectBrush : g->m_pNormalBrush, 4.0f);
 				SafeRelease(&pPathGeometry);
 			}
+			// –îˆó‚Ì•`‰æ
 			g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
 			if (pPathGeometry) {
 				ID2D1GeometrySink* pSink;
@@ -83,41 +85,73 @@ public:
 	}
 	virtual bool hit(const graphic* g, const point* p, UINT64 generation) const override { // ‘‚«’¼‚·•K—v‚ ‚è
 		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)) {
-			D2D1_POINT_2F c1 = {
-				(float)(start->p.x),
-				(float)(start->p.y)
-			};
-			D2D1_POINT_2F c2 = {
-				(float)(end->p.x),
-				(float)(start->p.y)
-			};
-			D2D1_POINT_2F c3 = {
-				(float)(start->p.x),
-				(float)(end->p.y)
-			};
-			D2D1_POINT_2F c4 = {
-				(float)(end->p.x),
-				(float)(end->p.y)
-			};
-			ID2D1PathGeometry* pPathGeometry;
-			g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
-			ID2D1GeometrySink* pSink;
-			pPathGeometry->Open(&pSink);
-			pSink->SetFillMode(D2D1_FILL_MODE_WINDING);
-			pSink->BeginFigure(c1, D2D1_FIGURE_BEGIN_FILLED);
-			pSink->AddBezier(D2D1::BezierSegment(c2, c3, c4));
-			pSink->EndFigure(D2D1_FIGURE_END_OPEN);
-			pSink->Close();
+
+			D2D1_POINT_2F c1, c2, c3, c4;
+			D2D1_POINT_2F t1, t2, t3;
+			// ‚½‚ÄÌ‚½‚Ä
+			if (start->p.y < end->p.y) {
+				c1 = { (float)(start->p.x), (float)(start->p.y + NODE_HEIGHT / 2.0) };
+				c4 = { (float)(end->p.x), (float)(end->p.y - NODE_HEIGHT / 2.0 - nArrowSize - 5.0f) };
+				t1 = { c4.x, c4.y + nArrowSize };
+				t2 = { t1.x - nArrowWidth,t1.y - nArrowSize };
+				t3 = { t1.x + nArrowWidth,t1.y - nArrowSize };
+			}
+			else {
+				c4 = { (float)(start->p.x), (float)(start->p.y - NODE_HEIGHT / 2.0) };
+				c1 = { (float)(end->p.x), (float)(end->p.y + NODE_HEIGHT / 2.0 + nArrowSize + 5.0f) };
+				t1 = { c1.x, c1.y - nArrowSize };
+				t2 = { t1.x - nArrowWidth,t1.y + nArrowSize };
+				t3 = { t1.x + nArrowWidth,t1.y + nArrowSize };
+			}
+			c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
+			c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
+
 			BOOL containsPoint = FALSE;
-			pPathGeometry->StrokeContainsPoint(
-				D2D1::Point2F((FLOAT)p->x, (FLOAT)p->y),
-				16,     // stroke width
-				NULL,   // stroke style
-				NULL,   // world transform
-				&containsPoint
-			);
-			SafeRelease(&pSink);
-			SafeRelease(&pPathGeometry);
+			{
+				ID2D1PathGeometry* pPathGeometry;
+				g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
+				if (pPathGeometry) {
+					ID2D1GeometrySink* pSink;
+					pPathGeometry->Open(&pSink);
+					pSink->SetFillMode(D2D1_FILL_MODE_WINDING);
+					pSink->BeginFigure(c1, D2D1_FIGURE_BEGIN_FILLED);
+					pSink->AddBezier(D2D1::BezierSegment(c2, c3, c4));
+					pSink->EndFigure(D2D1_FIGURE_END_OPEN);
+					pSink->Close();
+					pPathGeometry->StrokeContainsPoint(
+						D2D1::Point2F((FLOAT)p->x, (FLOAT)p->y),
+						16,     // stroke width
+						NULL,   // stroke style
+						NULL,   // world transform
+						&containsPoint
+					);
+					SafeRelease(&pSink);
+					SafeRelease(&pPathGeometry);
+				}
+			}
+			if (!containsPoint) {
+				ID2D1PathGeometry* pPathGeometry;
+				g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
+				if (pPathGeometry) {
+					ID2D1GeometrySink* pSink;
+					pPathGeometry->Open(&pSink);
+					pSink->SetFillMode(D2D1_FILL_MODE_WINDING);
+					pSink->BeginFigure(t1, D2D1_FIGURE_BEGIN_FILLED);
+					D2D1_POINT_2F points[] = { t2,t3 };
+					pSink->AddLines(points, ARRAYSIZE(points));
+					pSink->EndFigure(D2D1_FIGURE_END_CLOSED);
+					pSink->Close();
+					pPathGeometry->StrokeContainsPoint(
+						D2D1::Point2F((FLOAT)p->x, (FLOAT)p->y),
+						16,     // stroke width
+						NULL,   // stroke style
+						NULL,   // world transform
+						&containsPoint
+					);
+					SafeRelease(&pSink);
+					SafeRelease(&pPathGeometry);
+				}
+			}
 			return (bool)containsPoint;
 		}
 		return false;

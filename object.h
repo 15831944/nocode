@@ -34,6 +34,8 @@ enum OBJECT_KIND {
 
 class object {
 public:
+	static UINT64 initid;
+	UINT64 id;
 	OBJECT_KIND kind;
 	bool select;
 	UINT64 born;
@@ -41,11 +43,11 @@ public:
 	point p;
 	size s;
 	propertyitemlist* pl;
-	object(UINT64 initborn) :kind(OBJECT_PRIMITIVE), select(false), born(initborn), dead(UINT64_MAX), p{}, s{}, pl(0)
+	object(UINT64 initborn, OBJECT_KIND kind1) :id(++initid), kind(kind1), select(false), born(initborn), dead(UINT64_MAX), p{}, s{}, pl(0)
 	{
 		pl = new propertyitemlist;
 	}
-	object(const object* src, UINT64 initborn) : kind(src->kind), select(src->select), born(initborn), dead(UINT64_MAX), p(src->p), s(src->s) {
+	object(const object* src, UINT64 initborn) : id(src->id), kind(src->kind), select(src->select), born(initborn), dead(UINT64_MAX), p(src->p), s(src->s) {
 		pl = src->pl->copy();
 	}
 	virtual ~object() {

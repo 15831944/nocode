@@ -3,6 +3,7 @@
 #include <list>
 #include "object.h"
 #include "connectpoint.h"
+#include "arrow.h"
 
 class objectlist {
 public:
@@ -32,10 +33,11 @@ public:
 			}
 		}
 	}
-	void paint(const graphic* g, trans* t, UINT64 generation, point* dragoffset = nullptr) {
+	void paint(const graphic* g, trans* t, UINT64 generation, bool drawconnectpoint, point* dragoffset = nullptr) {
 
-		bool drawconnectpoint = (selectcount(generation) == 1);
-
+		if (!drawconnectpoint) {
+			drawconnectpoint = (selectcount(generation) == 1);
+		}
 		for (auto i : l) {
 			if (!i->isselect(generation))
 				i->paint(g, t, drawconnectpoint, generation);
@@ -79,7 +81,7 @@ public:
 			i->setselect(false, generation);
 		}
 	}
-	void rectselect(const point* p1, const point* p2, UINT64 generation, std::list<object*>* selectnode) {
+	void rectselect(const point* p1, const point* p2, UINT64 generation, std::vector<object*>* selectnode) {
 		if (selectnode->size() == 0) {
 			for (auto i : l) {
 				i->setselect(i->inrect(p1, p2, generation), generation);
@@ -127,7 +129,7 @@ public:
 		}
 		return false;
 	}
-	void selectlistup(std::list<object*>* selectnode, UINT64 generation) const {
+	void selectlistup(std::vector<object*>* selectnode, UINT64 generation) const {
 		for (auto i : l) {
 			if (i->isselect(generation)) {
 				selectnode->push_back(i);
@@ -143,14 +145,43 @@ public:
 		return 0;
 	}
 	void selectoffsetmerge(const point* dragoffset, UINT64 generation) {
-		std::list<object*> selectnode;
-		selectlistup(&selectnode, generation);
-		for (auto i : selectnode) {
-			i->kill(generation);
+		std::vector<object*> selectnode_old;
+		std::vector<object*> selectnode_new;
+		std::vector<arrow*> arrow_new;
+		selectlistup(&selectnode_old, generation);
+		for (auto i : selectnode_old) {
+			if (i->kind == OBJECT_ARROW) continue;
 			object* newnode = i->copy(generation);
 			newnode->p.x += dragoffset->x;
 			newnode->p.y += dragoffset->y;
 			l.push_back(newnode);
+			selectnode_new.push_back(newnode);
+		}
+		for (auto i : l)
+		{
+			if (i->isalive(generation) && i->kind == OBJECT_ARROW) {
+				arrow* a = (arrow*)i;
+				if (a->start && a->end && (a->start->isselect(generation) || a->end->isselect(generation))) {
+					a->kill(generation);
+					arrow* newarrow = a->copy(generation);
+					for (int j = 0; j < selectnode_old.size(); j++) {
+						if (newarrow->start == selectnode_old[j]) {
+							newarrow->start = (node*)selectnode_new[j];
+						}
+						if (newarrow->end == selectnode_old[j]) {
+							newarrow->end = (node*)selectnode_new[j];
+						}
+					}
+					arrow_new.push_back(newarrow);
+				}
+			}
+		}
+		for (auto i : selectnode_old) {
+			if (i->kind == OBJECT_ARROW) continue;
+			i->kill(generation);
+		}
+		for (auto i : arrow_new) {
+			l.push_back(i);
 		}
 	}
 	void allnodemargin(point* p1, point* p2, UINT64 generation) const {

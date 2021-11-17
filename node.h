@@ -10,8 +10,7 @@
 class node : public object {
 public:
 	WCHAR name[16];
-	node(UINT64 initborn) : object(initborn), name{} {
-		kind = NODE_NONE;
+	node(UINT64 initborn) : object(initborn, NODE_NONE), name{} {
 		s = { NODE_WIDTH, NODE_HEIGHT };
 	}
 	node(const node* src, UINT64 initborn) : object(src, initborn) {
@@ -33,8 +32,8 @@ public:
 			(float)(p.y + s.h / 2 + (offset ? offset->y : 0.0))
 		};
 		D2D1_ROUNDED_RECT rrect;
-		rrect.radiusX = 3.0f;
-		rrect.radiusY = 3.0f;
+		rrect.radiusX = 16.0f;
+		rrect.radiusY = 16.0f;
 		rrect.rect = rect;
 		g->m_pRenderTarget->FillRoundedRectangle(&rrect, select ? g->m_pSelectBkBrush : g->m_pNormalBkBrush);
 		g->m_pRenderTarget->DrawRoundedRectangle(&rrect, select ? g->m_pSelectBrush : g->m_pNormalBrush, 2.0f);
