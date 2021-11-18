@@ -1,22 +1,47 @@
 #pragma once
 
 #include <windows.h>
+#include <list>
 #include "object.h"
 
 #define NODE_WIDTH 200
 #define NODE_HEIGHT 100
 #define CONNECT_POINT_WIDTH 8.0f
 
+enum NODE_KIND {
+	NODE_NONE,
+	NODE_OUTPUT,
+	NODE_NORMAL2,
+	NODE_NORMAL3,
+	NODE_NORMAL4,
+	NODE_NORMAL5,
+	NODE_NORMAL6,
+	NODE_NORMAL7,
+	NODE_NORMAL8,
+	NODE_NORMAL9,
+	NODE_START,
+	NODE_END,
+	NODE_IF,
+	NODE_LOOP,
+	NODE_GOTO,
+	NODE_CUSTOM,
+	NODE_TIMER,
+	NODE_MULTI
+};
+
 class node : public object {
 public:
 	WCHAR name[16];
-	node(UINT64 initborn) : object(initborn, NODE_NONE), name{} {
+	node(UINT64 initborn) : object(initborn), name{} {
 		s = { NODE_WIDTH, NODE_HEIGHT };
 	}
 	node(const node* src, UINT64 initborn) : object(src, initborn) {
 		lstrcpy(name, src->name);
 	}
 	virtual ~node() {
+	}
+	virtual OBJECT_KIND getobjectkind() const {
+		return OBJECT_NODE;
 	}
 	virtual node* copy(UINT64 generation) const = 0;
 	virtual void paint(const graphic* g, const trans* t, bool drawconnectpoint, UINT64 generation, const point* offset = nullptr) const override {
@@ -86,20 +111,20 @@ public:
 		return 0;
 	}
 	virtual bool hit(const graphic* g, const point* p, UINT64 generation) const {
-		return
-			isalive(generation) &&
+		return isalive(generation) &&
 			p->x >= this->p.x - s.w / 2 &&
 			p->x <= this->p.x + s.w / 2 &&
 			p->y >= this->p.y - s.h / 2 &&
 			p->y <= this->p.y + s.h / 2;
 	}
 	virtual bool inrect(const point* p1, const point* p2, UINT64 generation) const {
-		return
-			isalive(generation) &&
+		return isalive(generation) &&
 			p.x - s.w / 2 >= p1->x &&
 			p.y - s.h / 2 >= p1->y &&
 			p.x + s.w / 2 <= p2->x &&
 			p.y + s.h / 2 <= p2->y;
 	}
 	virtual bool execute() const = 0;
+	virtual NODE_KIND getnodekind() const = 0;
+	virtual node* next_node(std::list<object*> l, UINT64 generation);
 };

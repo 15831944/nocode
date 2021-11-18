@@ -23,6 +23,10 @@
 #include "objectlist.h"
 #include "arrow.h"
 #include "app.h"
+#include "node_output.h"
+#include "node_start.h"
+#include "node_end.h"
+#include "node_timer.h"
 #include "resource.h"
 
 #if _DEBUG
@@ -38,46 +42,6 @@
 WCHAR szClassName[] = L"nocode";
 HHOOK g_hHook;
 common g_c;
-
-class node_output :public node
-{
-public:
-	node_output(UINT64 initborn) : node(initborn) {
-		kind = NODE_OUTPUT;
-		lstrcpy(name, L"出力");
-		pl->description = L"入力値を[出力]に表示します。";
-		{
-			propertyitem* pi = new propertyitem;
-			pi->kind = PROPERTY_MULTILINESTRING;
-			pi->setname(L"入力値");
-			pi->sethelp(L"テキストを入力してください。変数名を入力することも可能です。");
-			pi->setdescription(L"入力された文字列を「出力」に表示します。");
-			pi->setvalue(L"");
-			pl->l.push_back(pi);
-		}
-	}
-	node_output(const node_output* src, UINT64 initborn) : node(src, initborn) {}
-	virtual node* copy(UINT64 generation) const override {
-		node* newnode = new node_output(this, generation);
-		return newnode;
-	}
-	virtual bool execute() const override {
-		if (g_c.hOutput && IsWindow(g_c.hOutput)) {
-			HWND hEdit = GetTopWindow(g_c.hOutput);
-			if (hEdit && pl->l[0]->value && pl->l[0]->value->size() > 0) {
-				const int index = GetWindowTextLength(hEdit);
-				SendMessage(hEdit, EM_SETSEL, (WPARAM)index, (LPARAM)index);
-				SendMessage(hEdit, EM_REPLACESEL, 0, (LPARAM)pl->l[0]->value->c_str());
-				SendMessage(hEdit, EM_REPLACESEL, 0, (LPARAM)L"\r\n");
-				SendMessage(hEdit, EM_SCROLLCARET, 0, 0);
-				return true;
-			}
-		}
-		return false;
-	}
-	virtual void save(HANDLE hFile) const {};
-	virtual void open(HANDLE hFile) const {};
-};
 
 LRESULT CALLBACK RichEditProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -330,17 +294,61 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 			}
 			// 子ノード1
 			if (hRootItem) {
-				node* n = new node_output(0);
-				if (n) {
-					TV_INSERTSTRUCT tv = { 0 };
-					tv.hParent = hRootItem;
-					tv.hInsertAfter = TVI_LAST;
-					tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
-					tv.item.pszText = n->name;
-					tv.item.iImage = 2;
-					tv.item.iSelectedImage = 3;
-					tv.item.lParam = (LPARAM)n;
-					HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
+				{
+					node* n = new node_output(0);
+					if (n) {
+						TV_INSERTSTRUCT tv = { 0 };
+						tv.hParent = hRootItem;
+						tv.hInsertAfter = TVI_LAST;
+						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+						tv.item.pszText = n->name;
+						tv.item.iImage = 2;
+						tv.item.iSelectedImage = 3;
+						tv.item.lParam = (LPARAM)n;
+						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
+					}
+				}
+				{
+					node* n = new node_start(0);
+					if (n) {
+						TV_INSERTSTRUCT tv = { 0 };
+						tv.hParent = hRootItem;
+						tv.hInsertAfter = TVI_LAST;
+						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+						tv.item.pszText = n->name;
+						tv.item.iImage = 2;
+						tv.item.iSelectedImage = 3;
+						tv.item.lParam = (LPARAM)n;
+						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
+					}
+				}
+				{
+					node* n = new node_end(0);
+					if (n) {
+						TV_INSERTSTRUCT tv = { 0 };
+						tv.hParent = hRootItem;
+						tv.hInsertAfter = TVI_LAST;
+						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+						tv.item.pszText = n->name;
+						tv.item.iImage = 2;
+						tv.item.iSelectedImage = 3;
+						tv.item.lParam = (LPARAM)n;
+						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
+					}
+				}
+				{
+					node* n = new node_timer(0);
+					if (n) {
+						TV_INSERTSTRUCT tv = { 0 };
+						tv.hParent = hRootItem;
+						tv.hInsertAfter = TVI_LAST;
+						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+						tv.item.pszText = n->name;
+						tv.item.iImage = 2;
+						tv.item.iSelectedImage = 3;
+						tv.item.lParam = (LPARAM)n;
+						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
+					}
 				}
 			}
 		}
@@ -556,11 +564,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_CREATE:
 		InitCommonControls();
 		LoadLibrary(L"riched20");
+
 		pNoCodeApp = new app();
 		g_c.app = (void*)pNoCodeApp;
-		if (pNoCodeApp) {
-			pNoCodeApp->OnCreate(hWnd);
-		}
+
 		SendMessage(hWnd, WM_APP, 0, 0);
 
 		g_c.hList = CreateWindowEx(WS_EX_TOPMOST | WS_EX_CLIENTEDGE | WS_EX_NOACTIVATE, L"LISTBOX", NULL, WS_POPUP | WS_VSCROLL, 0, 0, 0, 0, 0, 0, ((LPCREATESTRUCT)lParam)->hInstance, NULL);
@@ -624,11 +631,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			}
 		}
 
+		if (pNoCodeApp) {
+			pNoCodeApp->OnCreate(hWnd); // ツールバーなどが作成された後に呼び出す
+		}
+
 		break;
 	case WM_APP: // 画面DPIが変わった時、ウィンドウ作成時にフォントの生成を行う
 		util::GetScaling(hWnd, &g_c.uDpiX, &g_c.uDpiY);
 		DeleteObject(g_c.hUIFont);
 		g_c.hUIFont = CreateFontW(-POINT2PIXEL(FONT_SIZE), 0, 0, 0, FW_DONTCARE, 0, 0, 0, ANSI_CHARSET, 0, 0, 0, 0, FONT_NAME);
+		break;
+	case  WM_APP + 1:
+		if (pNoCodeApp) {
+			pNoCodeApp->OnEnd();
+		}
 		break;
 	case WM_RBUTTONDOWN:
 		if (pNoCodeApp) {
@@ -753,6 +769,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case ID_RUN:
 			if (pNoCodeApp) {
 				pNoCodeApp->OnRun();
+			}
+			break;
+		case ID_SUSPEND:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnSuspend();
+			}
+			break;
+		case ID_STOP:
+			if (pNoCodeApp) {
+				pNoCodeApp->OnStop();
 			}
 			break;
 		case ID_OUTPUT_CLEAR:

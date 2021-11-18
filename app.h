@@ -7,9 +7,10 @@
 #include "trans.h"
 #include "objectlist.h"
 #include "mode.h"
+#include "object.h"
+#include "arrow.h"
 #include "node.h"
 #include "common.h"
-#include "arrow.h"
 #include "util.h"
 #include "resource.h"
 
@@ -45,22 +46,49 @@ public:
 	connectpoint cp2 = {};
 	point pt1;
 	point pt2;
+	bool bIsRunning;
+	bool bForceExit;
+	bool bIsSuspend;
+	HANDLE hThread;
 
 	object* GetFirstSelectObject() const {
 		return nl.getfirstselectobject(generation);
 	}
 
 	void RefreshToolBar() {
-		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_UNDO, CanUndo());
-		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_REDO, CanRedo());
-		bool selected = nl.selectcount(generation) > 0;
-		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_COPY, selected);
-		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_CUT, selected);
-		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_PASTE, selected);
-		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_DELETE, selected);
+		if (bIsRunning)
+		{
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_UNDO, FALSE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_REDO, FALSE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_COPY, FALSE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_CUT, FALSE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_PASTE, FALSE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_DELETE, FALSE);
 
-		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_ZOOM, ZOOM_MAX > t.z);
-		SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_SHRINK, ZOOM_MIN < t.z);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_RUN, FALSE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_SUSPEND, TRUE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_STOP, TRUE);
+
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_ZOOM, ZOOM_MAX > t.z);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_SHRINK, ZOOM_MIN < t.z);
+		}
+		else
+		{
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_UNDO, CanUndo());
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_REDO, CanRedo());
+			bool selected = nl.selectcount(generation) > 0;
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_COPY, selected);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_CUT, selected);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_PASTE, selected);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_DELETE, selected);
+
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_RUN, TRUE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_SUSPEND, FALSE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_STOP, FALSE);
+
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_ZOOM, ZOOM_MAX > t.z);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_SHRINK, ZOOM_MIN < t.z);
+		}
 	}
 
 	bool beginedit(LONG_PTR kind = -1) {
@@ -101,6 +129,10 @@ public:
 		, selectnode{}
 		, editkind(-1)
 		, szFilePath{}
+		, bIsRunning(false)
+		, bForceExit(false)
+		, bIsSuspend(false)
+		, hThread(0)
 	{
 	}
 
@@ -173,6 +205,7 @@ public:
 		{			
 			pt1 = cp1.pt;
 			pt2 = cp1.pt;
+			OnProperty();
 			mode = connection;
 			//MessageBox(hWnd, 0, 0, 0);
 		}
@@ -206,6 +239,7 @@ public:
 	}
 
 	void OnLButtonUp(int x, int y) {
+		ReleaseCapture();
 		if (mode == dragnode) {
 			if (dragjudge) {
 				dragjudge = false;
@@ -232,12 +266,12 @@ public:
 			point p1{ (double)x, (double)y };
 			point p2;
 			t.d2l(&p1, &p2);
-			if ((dd = nl.hit(g_c.g, &p2, generation)) != nullptr)
+			if ((dd = nl.hit(g_c.g, &p2, generation)) != nullptr && dd->getobjectkind() != OBJECT_ARROW)
 			{
 				bool bExistSameArrow = false;
 				for (auto i : nl.l)
 				{
-					if (i->isalive(generation) && i->kind == OBJECT_ARROW)
+					if (i->isalive(generation) && i->getobjectkind() == OBJECT_ARROW)
 					{
 						arrow* a = (arrow*)i;
 						if (a->start == (node*)cp1.n &&
@@ -258,11 +292,11 @@ public:
 					newarrow->end_pos = CONNECT_TOP;
 					newarrow->select = true;
 					nl.add(newarrow);
+					OnProperty();
 				}
 			}
 		}
 		mode = none;
-		ReleaseCapture();
 		InvalidateRect(hWnd, NULL, FALSE);
 	}
 
@@ -404,8 +438,9 @@ public:
 			t.d2l(&p1, &p2);
 
 			object* dd = nl.hit(g_c.g, &p2, generation);
-			if (dd)
+			if (dd && dd->getobjectkind() != OBJECT_ARROW)
 			{
+
 				dd->setselect(true, generation);
 			}
 
@@ -437,7 +472,7 @@ public:
 				if (g_c.bShowGrid) {
 					drawgrid(g_c.g, &t);
 				}
-				nl.paint(g_c.g, &t, generation, (mode == connection) ? true : false, mode == dragnode ? &dragoffset : nullptr);
+				nl.paint(g_c.g, &t, generation, mode == dragnode ? &dragoffset : nullptr);
 				if (nn) nn->paint(g_c.g, &t, false, generation);
 				if (mode == connection)
 				{
@@ -547,7 +582,7 @@ public:
 
 	void OnDelete() {
 		beginedit();
-		nl.del(generation);
+		nl.delselectobject(generation);
 		OnProperty();
 		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
@@ -639,10 +674,55 @@ public:
 	}
 
 	void OnRun() {
-		if (nl.selectcount(generation) == 1) {
-			object* first = nl.getfirstselectobject(generation);
-			if (first && NODE_NONE <= first->kind && first->kind <= NODE_MULTI) {
-				((node*)first)->execute();
+		if (bIsRunning) {
+			if (bIsSuspend) {
+				bIsSuspend = false;
+				RefreshToolBar();
+			}
+		} else {
+			bIsRunning = true;
+			bIsSuspend = false;
+			bForceExit = false;
+			RefreshToolBar();
+
+			DWORD dwParam;
+			hThread = CreateThread(0, 0, ThreadFunc, (LPVOID)this, 0, &dwParam);
+		}
+	}
+
+	void OnEnd() { // 実際にプログラムの停止時に呼び出される
+		WaitForSingleObject(hThread, INFINITE);
+		CloseHandle(hThread);
+		hThread = 0;
+		bIsRunning = false;
+		bIsSuspend = false;
+		bForceExit = false;
+		RefreshToolBar();
+	}
+
+	void OnSuspend() { // 停止フラグをONにする
+		if (bIsRunning) {
+			bIsSuspend = true;
+			RefreshToolBar();
+		}
+	}
+
+	void OnStop() { // 止めるフラグをONにする
+		if (bIsRunning) {
+			DWORD dwParam;
+			GetExitCodeThread(hThread, &dwParam);
+			if (dwParam == STILL_ACTIVE) {
+				bForceExit = true;
+				RefreshToolBar();
+			}
+			else {
+				WaitForSingleObject(hThread, INFINITE);
+				CloseHandle(hThread);
+				hThread = 0;
+				bIsRunning = false;
+				bIsSuspend = false;
+				bForceExit = false;
+				RefreshToolBar();
 			}
 		}
 	}
@@ -690,7 +770,15 @@ public:
 							break;
 						case PROPERTY_INT:
 							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
-							CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_WANTRETURN, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
+							{
+								HWND hEdit = CreateWindowEx(WS_EX_STATICEDGE, RICHEDIT_CLASSW, 0, WS_VISIBLE | WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL | ES_NOHIDESEL | ES_NUMBER, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
+								SendMessage(hEdit, EM_SETEDITSTYLE, SES_EMULATESYSEDIT, SES_EMULATESYSEDIT);
+								SendMessage(hEdit, EM_SETEVENTMASK, 0, ENM_UPDATE);
+								SendMessage(hEdit, EM_LIMITTEXT, -1, 0);
+								util::DefaultRichEditProc = (WNDPROC)SetWindowLongPtr(hEdit, GWLP_WNDPROC, (LONG_PTR)RichEditProc);
+								SetWindowText(hEdit, (i->value) ? (i->value->c_str()) : 0);
+							}
+							//CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_WANTRETURN, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 							CreateWindowEx(0, L"STATIC", (i->unit) ? (i->unit->c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, POINT2PIXEL(64 + 128 + 32), nYtop, POINT2PIXEL(32), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							nYtop += POINT2PIXEL(32);
 							break;
@@ -761,6 +849,9 @@ public:
 			enable_edit_event = true;
 			EnumChildWindows(hDlg, util::EnumChildSetFontProc, 0);
 			return TRUE;
+		case WM_COMMAND:
+			
+			break;
 		case WM_APP:
 			if (pNoCodeApp) {
 				if (HIWORD(wParam) == EN_UPDATE) {
@@ -802,8 +893,35 @@ public:
 		for (auto i : selectnode) {
 			object* newnode = i;
 			if (firstedit) {
+				std::vector<arrow*> arrow_start;
+				std::vector<arrow*> arrow_end;
+				if (newnode->getobjectkind() == OBJECT_NODE) {
+					for (auto j : nl.l) {
+						if (j->isalive(generation) && j->getobjectkind() == OBJECT_ARROW) {
+							arrow* a = (arrow*)j;
+							if (a->start == i) {
+								arrow_start.push_back(a);
+							}
+							if (a->end == i) {
+								arrow_end.push_back(a);
+							}
+						}
+					}
+				}
 				newnode->kill(generation);
 				newnode = i->copy(generation);
+				for (auto j : arrow_start) {
+					arrow* a = j->copy(generation);
+					j->kill(generation);
+					a->start = (node*)newnode;
+					nl.add(a);
+				}
+				for (auto j : arrow_end) {
+					arrow* a = j->copy(generation);
+					j->kill(generation);
+					a->end = (node*)newnode;
+					nl.add(a);
+				}
 			}
 			newnode->setpropertyvalue(index, pi);
 			if (firstedit) {
@@ -813,39 +931,87 @@ public:
 	}
 
 	void OnProperty() {
-		node* n = 0;
-		switch (GetSelectKind(n)) {
-		case NODE_NONE:
-			DestroyWindow(GetTopWindow(g_c.hPropContainer));
-			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NONE), g_c.hPropContainer, DialogProc, (LPARAM)0);
-			break;
-		case NODE_OUTPUT:
-		case NODE_NORMAL2:
-		case NODE_NORMAL3:
-		case NODE_NORMAL4:
+		switch (GetSelectObjectKind()) {
+		case OBJECT_NODE:
 			DestroyWindow(GetTopWindow(g_c.hPropContainer));
 			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), g_c.hPropContainer, DialogProc, (LPARAM)this);
 			break;
-		case NODE_MULTI:
+		case OBJECT_MULTI:
 			DestroyWindow(GetTopWindow(g_c.hPropContainer));
 			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_MULTI), g_c.hPropContainer, DialogProc, (LPARAM)0);
+			break;
+		case OBJECT_NONE:
+		default:
+			DestroyWindow(GetTopWindow(g_c.hPropContainer));
+			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NONE), g_c.hPropContainer, DialogProc, (LPARAM)0);
 			break;
 		}
 		SetFocus(g_c.hPropContainer);
 	}
 
-	OBJECT_KIND GetSelectKind(object* n) const {
+	OBJECT_KIND GetSelectObjectKind() const {
 		const int selcount = nl.selectcount(generation);
 		if (selcount > 1)
-			return NODE_MULTI;
+			return OBJECT_MULTI;
 		if (selcount == 0)
-			return NODE_NONE;
+			return OBJECT_NONE;
 		std::vector<object*> selectnode;
 		nl.selectlistup(&selectnode, generation);
 		for (auto i : selectnode) {
-			n = i;
-			return i->kind;
+			return i->getobjectkind();
 		}
-		return NODE_NONE;
+		return OBJECT_NONE;
+	}
+
+	void Error(LPCWSTR lpszMessage) {
+		if (g_c.hMainWnd && IsWindow(g_c.hMainWnd))
+		{
+			MessageBox(g_c.hMainWnd, lpszMessage, 0, 0);
+		}
+	}
+
+	static DWORD WINAPI ThreadFunc(LPVOID p)
+	{
+		bool bIsEndNodeLast = true;
+		app* a = (app*)p;
+		if (a) {
+			node* start = 0;
+			for(auto i : a->nl.l) {
+				if (i->isalive(a->generation) && i->getobjectkind() == OBJECT_NODE) {
+					node* n = (node*)i;
+					if (n->getnodekind() == NODE_START) {
+						if (start == 0) {
+							start = n;
+						}
+						else {
+							a->Error(L"2つ以上開始ノードが配置されています。開始ノードは1つのみにしてください。");
+							goto EXIT0;
+						}
+					}
+				}
+			}
+			if (start == 0) {
+				a->Error(L"開始ノードが見つかりませんでした。。1つ開始ノードを配置してください。");
+				goto EXIT0;
+			}
+			bIsEndNodeLast = false;
+			while (start)
+			{
+				start->execute();
+				if (start->getnodekind() == NODE_END) {
+					bIsEndNodeLast = true;
+					break;
+				}
+				start = start->next_node(a->nl.l, a->generation);
+			}
+		}
+
+	EXIT0:
+
+		if (bIsEndNodeLast && a->hWnd && IsWindow(a->hWnd)) {
+			PostMessage((HWND)a->hWnd, WM_APP + 1, 0, 0);
+		}
+
+		ExitThread(0);
 	}
 };

@@ -166,6 +166,10 @@
     <ClCompile Include="graphic.cpp" />
     <ClCompile Include="mode.cpp" />
     <ClCompile Include="node.cpp" />
+    <ClCompile Include="node_end.cpp" />
+    <ClCompile Include="node_output.cpp" />
+    <ClCompile Include="node_start.cpp" />
+    <ClCompile Include="node_timer.cpp" />
     <ClCompile Include="object.cpp" />
     <ClCompile Include="objectlist.cpp" />
     <ClCompile Include="point.cpp" />
@@ -184,6 +188,10 @@
     <ClInclude Include="graphic.h" />
     <ClInclude Include="mode.h" />
     <ClInclude Include="node.h" />
+    <ClInclude Include="node_end.h" />
+    <ClInclude Include="node_output.h" />
+    <ClInclude Include="node_start.h" />
+    <ClInclude Include="node_timer.h" />
     <ClInclude Include="object.h" />
     <ClInclude Include="objectlist.h" />
     <ClInclude Include="point.h" />

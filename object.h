@@ -8,46 +8,29 @@
 #include "trans.h"
 
 enum OBJECT_KIND {
+	OBJECT_NONE,
 	OBJECT_PRIMITIVE,
 	OBJECT_NODE,
 	OBJECT_ARROW,
 	OBJECT_COMMENT,
-	NODE_NONE,
-	NODE_OUTPUT,
-	NODE_NORMAL2,
-	NODE_NORMAL3,
-	NODE_NORMAL4,
-	NODE_NORMAL5,
-	NODE_NORMAL6,
-	NODE_NORMAL7,
-	NODE_NORMAL8,
-	NODE_NORMAL9,
-	NODE_START,
-	NODE_END,
-	NODE_IF,
-	NODE_LOOP,
-	NODE_GOTO,
-	NODE_CUSTOM,
-	NODE_MULTI
-
+	OBJECT_MULTI,
 };
 
 class object {
 public:
 	static UINT64 initid;
 	UINT64 id;
-	OBJECT_KIND kind;
 	bool select;
 	UINT64 born;
 	UINT64 dead;
 	point p;
 	size s;
 	propertyitemlist* pl;
-	object(UINT64 initborn, OBJECT_KIND kind1) :id(++initid), kind(kind1), select(false), born(initborn), dead(UINT64_MAX), p{}, s{}, pl(0)
+	object(UINT64 initborn) :id(++initid), select(false), born(initborn), dead(UINT64_MAX), p{}, s{}, pl(0)
 	{
 		pl = new propertyitemlist;
 	}
-	object(const object* src, UINT64 initborn) : id(src->id), kind(src->kind), select(src->select), born(initborn), dead(UINT64_MAX), p(src->p), s(src->s) {
+	object(const object* src, UINT64 initborn) : id(src->id), select(src->select), born(initborn), dead(UINT64_MAX), p(src->p), s(src->s) {
 		pl = src->pl->copy();
 	}
 	virtual ~object() {
@@ -83,6 +66,7 @@ public:
 			*(pl->l[index]->value) = *(pi->value);
 		}
 	}
+	virtual OBJECT_KIND getobjectkind() const = 0;
 	virtual void save(HANDLE hFile) const = 0;
 	virtual void open(HANDLE hFile) const = 0;
 };

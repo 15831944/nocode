@@ -33,11 +33,8 @@ public:
 			}
 		}
 	}
-	void paint(const graphic* g, trans* t, UINT64 generation, bool drawconnectpoint, point* dragoffset = nullptr) {
-
-		if (!drawconnectpoint) {
-			drawconnectpoint = (selectcount(generation) == 1);
-		}
+	void paint(const graphic* g, trans* t, UINT64 generation, point* dragoffset = nullptr) {
+		bool drawconnectpoint = (selectcount(generation) == 1);
 		for (auto i : l) {
 			if (!i->isselect(generation))
 				i->paint(g, t, drawconnectpoint, generation);
@@ -105,10 +102,21 @@ public:
 			i->setselect(true, generation);
 		}
 	}
-	void del(UINT64 generation) {
+	void delselectobject(UINT64 generation) {
 		for (auto i : l) {
 			if (i->isselect(generation)) {
-				i->dead = generation;
+				// •R‚Ã‚­arrow‚àÁ‚·
+				if (i->getobjectkind() == OBJECT_NODE) {
+					for (auto j : l) {
+						if (j->isalive(generation) && j->getobjectkind() == OBJECT_ARROW) {
+							arrow* a = (arrow*)j;
+							if (a->start == i || a->end == i) {
+								a->kill(generation);
+							}
+						}
+					}
+				}
+				i->kill(generation);
 			}
 		}
 	}
@@ -150,7 +158,7 @@ public:
 		std::vector<arrow*> arrow_new;
 		selectlistup(&selectnode_old, generation);
 		for (auto i : selectnode_old) {
-			if (i->kind == OBJECT_ARROW) continue;
+			if (i->getobjectkind() == OBJECT_ARROW) continue;
 			object* newnode = i->copy(generation);
 			newnode->p.x += dragoffset->x;
 			newnode->p.y += dragoffset->y;
@@ -159,12 +167,12 @@ public:
 		}
 		for (auto i : l)
 		{
-			if (i->isalive(generation) && i->kind == OBJECT_ARROW) {
+			if (i->isalive(generation) && i->getobjectkind() == OBJECT_ARROW) {
 				arrow* a = (arrow*)i;
 				if (a->start && a->end && (a->start->isselect(generation) || a->end->isselect(generation))) {
 					a->kill(generation);
 					arrow* newarrow = a->copy(generation);
-					for (int j = 0; j < selectnode_old.size(); j++) {
+					for (unsigned int j = 0; j < selectnode_old.size(); j++) {
 						if (newarrow->start == selectnode_old[j]) {
 							newarrow->start = (node*)selectnode_new[j];
 						}
@@ -177,7 +185,7 @@ public:
 			}
 		}
 		for (auto i : selectnode_old) {
-			if (i->kind == OBJECT_ARROW) continue;
+			if (i->getobjectkind() == OBJECT_ARROW) continue;
 			i->kill(generation);
 		}
 		for (auto i : arrow_new) {

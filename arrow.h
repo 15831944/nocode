@@ -14,18 +14,21 @@ public:
 	const float nArrowSize = 16.0;
 	const float nArrowWidth = 8.0;
 
-	arrow(UINT64 initborn) : object(initborn, OBJECT_ARROW), start(0), end(0), start_pos(CONNECT_NONE), end_pos(CONNECT_NONE) {}
+	arrow(UINT64 initborn) : object(initborn), start(0), end(0), start_pos(CONNECT_NONE), end_pos(CONNECT_NONE) {}
 
-	arrow(const arrow* src, UINT64 initborn) : object(initborn, OBJECT_ARROW) {
+	arrow(const arrow* src, UINT64 initborn) : object(initborn) {
 		start = src->start;
 		end = src->end;
 		start_pos = src->start_pos;
 		end_pos = src->end_pos;
 	}
 
+	virtual OBJECT_KIND getobjectkind() const {
+		return OBJECT_ARROW;
+	};
+
 	virtual void paint(const graphic* g, const trans* t, bool drawconnectpoint, UINT64 generation, const point* offset = nullptr) const override { // 書き直す必要あり
-		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)
-			&& start_pos != CONNECT_NONE && end_pos != CONNECT_NONE) {
+		if (isalive(generation) && start && end) {
 			g->m_pRenderTarget->SetTransform(
 				D2D1::Matrix3x2F::Translation((FLOAT)(t->c.w / 2 + t->p.x - t->l.x), (FLOAT)(t->c.h / 2 + t->p.y - t->l.y)) *
 				D2D1::Matrix3x2F::Scale((FLOAT)t->z, (FLOAT)t->z, D2D1::Point2F((FLOAT)(t->c.w / 2 + t->p.x), (FLOAT)(t->c.h / 2 + t->p.y)))
@@ -84,7 +87,7 @@ public:
 		}
 	}
 	virtual bool hit(const graphic* g, const point* p, UINT64 generation) const override { // 書き直す必要あり
-		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)) {
+		if (isalive(generation) && start && end) {
 
 			D2D1_POINT_2F c1, c2, c3, c4;
 			D2D1_POINT_2F t1, t2, t3;
@@ -157,7 +160,7 @@ public:
 		return false;
 	}
 	virtual bool inrect(const point* p1, const point* p2, UINT64 generation) const override { // 書き直す必要あり
-		if (isalive(generation) && start && start->isalive(generation) && end && end->isalive(generation)) {
+		if (isalive(generation) && start && end) {
 			if (
 				p1->x <= min(start->p.x, end->p.x) && max(start->p.x, end->p.x) <= p2->x &&
 				p1->y <= min(start->p.y, end->p.y) && max(start->p.y, end->p.y) <= p2->y
