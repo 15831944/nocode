@@ -4,6 +4,12 @@
 #include <list>
 #include "object.h"
 
+#if _DEBUG
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#define new new(_NORMAL_BLOCK, __FILE__, __LINE__)
+#endif
+
 #define NODE_WIDTH 200
 #define NODE_HEIGHT 100
 #define CONNECT_POINT_WIDTH 8.0f
@@ -60,9 +66,9 @@ public:
 		rrect.radiusX = 16.0f;
 		rrect.radiusY = 16.0f;
 		rrect.rect = rect;
-		g->m_pRenderTarget->FillRoundedRectangle(&rrect, select ? g->m_pSelectBkBrush : g->m_pNormalBkBrush);
-		g->m_pRenderTarget->DrawRoundedRectangle(&rrect, select ? g->m_pSelectBrush : g->m_pNormalBrush, 2.0f);
-		g->m_pRenderTarget->DrawText(name, lstrlenW(name), g->m_pTextFormat, &rect, select ? g->m_pSelectBrush : g->m_pNormalBrush);
+		g->m_pRenderTarget->FillRoundedRectangle(&rrect, running? g->m_pRunningBkBrush : select ? g->m_pSelectBkBrush : g->m_pNormalBkBrush);
+		g->m_pRenderTarget->DrawRoundedRectangle(&rrect, running ? g->m_pRunningBrush : select ? g->m_pSelectBrush : g->m_pNormalBrush, 2.0f);
+		g->m_pRenderTarget->DrawText(name, lstrlenW(name), g->m_pTextFormat, &rect, running ? g->m_pRunningBrush : select ? g->m_pSelectBrush : g->m_pNormalBrush);
 		g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 		if (drawconnectpoint && select && offset == nullptr) {
 			this->drawconnectpoint(g, t, generation);
@@ -88,7 +94,7 @@ public:
 		g->m_pRenderTarget->DrawEllipse(&right1, g->m_pConnectPointBrush);
 		g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 	}
-	virtual int hitconnectpoint(const point* p, point* cp, UINT64 generation) const override { // top->1, bottom->2, left->3, right->4, else->0
+	virtual int hitconnectpoint(const point* p, point* cp, UINT64 generation, const float offset = 16.0f) const override { // top->1, bottom->2, left->3, right->4, else->0
 		if (isalive(generation)) {
 			D2D1_POINT_2F points[] = {
 				{ (float)this->p.x, (float)(this->p.y - s.h / 2.0) },
@@ -110,21 +116,22 @@ public:
 		}
 		return 0;
 	}
-	virtual bool hit(const graphic* g, const point* p, UINT64 generation) const {
+	virtual bool hit(const graphic* g, const point* p, UINT64 generation, const float offset = 16.0f) const {
 		return isalive(generation) &&
-			p->x >= this->p.x - s.w / 2 &&
-			p->x <= this->p.x + s.w / 2 &&
-			p->y >= this->p.y - s.h / 2 &&
-			p->y <= this->p.y + s.h / 2;
+			p->x >= this->p.x - s.w / 2 - offset &&
+			p->x <= this->p.x + s.w / 2 + offset &&
+			p->y >= this->p.y - s.h / 2 - offset &&
+			p->y <= this->p.y + s.h / 2 + offset;
 	}
-	virtual bool inrect(const point* p1, const point* p2, UINT64 generation) const {
+	virtual bool inrect(const point* p1, const point* p2, UINT64 generation, const float offset = 16.0f) const {
 		return isalive(generation) &&
-			p.x - s.w / 2 >= p1->x &&
-			p.y - s.h / 2 >= p1->y &&
-			p.x + s.w / 2 <= p2->x &&
-			p.y + s.h / 2 <= p2->y;
+			p.x - s.w / 2 - offset >= p1->x &&
+			p.y - s.h / 2 - offset >= p1->y &&
+			p.x + s.w / 2 + offset <= p2->x &&
+			p.y + s.h / 2 + offset <= p2->y;
 	}
-	virtual bool execute() const = 0;
+	virtual bool execute(bool *exit) const = 0;
 	virtual NODE_KIND getnodekind() const = 0;
+	virtual object* next_arrow(std::list<object*> l, UINT64 generation);
 	virtual node* next_node(std::list<object*> l, UINT64 generation);
 };

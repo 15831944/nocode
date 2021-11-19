@@ -4,6 +4,12 @@
 #include <dwrite.h>
 #include "util.h"
 
+#if _DEBUG
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#define new new(_NORMAL_BLOCK, __FILE__, __LINE__)
+#endif
+
 #define FONT_NAME L"Consolas"
 
 template<class Interface> inline void SafeRelease(Interface** ppInterfaceToRelease)
@@ -24,8 +30,10 @@ public:
 	IDWriteTextFormat* m_pTextFormat;
 	ID2D1SolidColorBrush* m_pNormalBrush;
 	ID2D1SolidColorBrush* m_pSelectBrush;
+	ID2D1SolidColorBrush* m_pRunningBrush;
 	ID2D1SolidColorBrush* m_pNormalBkBrush;
 	ID2D1SolidColorBrush* m_pSelectBkBrush;
+	ID2D1SolidColorBrush* m_pRunningBkBrush;
 	ID2D1SolidColorBrush* m_pGridBrush;
 	ID2D1SolidColorBrush* m_pConnectPointBrush;
 	ID2D1SolidColorBrush* m_pConnectPointBkBrush;
@@ -37,8 +45,10 @@ public:
 		, m_pTextFormat(0)
 		, m_pNormalBrush(0)
 		, m_pSelectBrush(0)
+		, m_pRunningBrush(0)
 		, m_pNormalBkBrush(0)
 		, m_pSelectBkBrush(0)
+		, m_pRunningBkBrush(0)
 		, m_pGridBrush(0)
 		, m_pConnectPointBrush(0)
 		, m_pConnectPointBkBrush(0)
@@ -65,8 +75,10 @@ public:
 		SafeRelease(&m_pTextFormat);
 		SafeRelease(&m_pNormalBrush);
 		SafeRelease(&m_pSelectBrush);
+		SafeRelease(&m_pRunningBrush);
 		SafeRelease(&m_pNormalBkBrush);
 		SafeRelease(&m_pSelectBkBrush);
+		SafeRelease(&m_pRunningBkBrush);
 		SafeRelease(&m_pGridBrush);
 		SafeRelease(&m_pConnectPointBrush);
 		SafeRelease(&m_pConnectPointBkBrush);
@@ -84,9 +96,13 @@ public:
 			if (SUCCEEDED(hr))
 				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Red), &m_pSelectBrush);
 			if (SUCCEEDED(hr))
+				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Blue), &m_pRunningBrush);
+			if (SUCCEEDED(hr))
 				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.75f), &m_pNormalBkBrush);
 			if (SUCCEEDED(hr))
 				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 0.0f, 0.0f, 0.25f), &m_pSelectBkBrush);
+			if (SUCCEEDED(hr))
+				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.0f, 1.0f, 0.25f), &m_pRunningBkBrush);
 			if (SUCCEEDED(hr))
 				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(0.80f, 0.80f, 0.80f, 1.00f), &m_pGridBrush);
 			if (SUCCEEDED(hr))
@@ -107,8 +123,10 @@ public:
 			SafeRelease(&m_pRenderTarget);
 			SafeRelease(&m_pNormalBrush);
 			SafeRelease(&m_pSelectBrush);
+			SafeRelease(&m_pRunningBrush);
 			SafeRelease(&m_pNormalBkBrush);
 			SafeRelease(&m_pSelectBkBrush);
+			SafeRelease(&m_pRunningBkBrush);
 			SafeRelease(&m_pGridBrush);
 			SafeRelease(&m_pConnectPointBrush);
 			SafeRelease(&m_pConnectPointBkBrush);

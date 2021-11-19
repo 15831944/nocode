@@ -5,6 +5,12 @@
 #include "connectpoint.h"
 #include "arrow.h"
 
+#if _DEBUG
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#define new new(_NORMAL_BLOCK, __FILE__, __LINE__)
+#endif
+
 class objectlist {
 public:
 	std::list<object*> l;
@@ -97,23 +103,39 @@ public:
 			}
 		}
 	}
-	void allselect(UINT64 generation) {
+	void allselect(bool select, UINT64 generation) {
 		for (auto i : l) {
-			i->setselect(true, generation);
+			i->setselect(select, generation);
 		}
 	}
 	void delselectobject(UINT64 generation) {
-		for (auto i : l) {
+		std::vector<object*> select_object;
+		selectlistup(&select_object, generation);
+		for (auto i : select_object) {
 			if (i->isselect(generation)) {
 				// 紐づくarrowも消す
 				if (i->getobjectkind() == OBJECT_NODE) {
+					std::vector<arrow*> arrow_start;
+					std::vector<arrow*> arrow_end;
 					for (auto j : l) {
 						if (j->isalive(generation) && j->getobjectkind() == OBJECT_ARROW) {
 							arrow* a = (arrow*)j;
 							if (a->start == i || a->end == i) {
 								a->kill(generation);
+								if (a->start == i) {
+									arrow_start.push_back(a);
+								}
+								if (a->end == i) {
+									arrow_end.push_back(a);
+								}
 							}
 						}
+					}
+					if (arrow_start.size() == 1 && arrow_end.size() == 1) {
+						arrow* newarrow = arrow_end[0]->copy(generation);
+						newarrow->end = arrow_start[0]->end;
+						newarrow->end_pos = arrow_start[0]->end_pos;
+						l.push_back(newarrow);
 					}
 				}
 				i->kill(generation);
@@ -152,7 +174,7 @@ public:
 		}
 		return 0;
 	}
-	void selectoffsetmerge(const point* dragoffset, UINT64 generation) {
+	void selectoffsetmerge(const graphic* g, const point* p/*マウスカーソルの座標*/, const point* dragoffset, UINT64 generation) {
 		std::vector<object*> selectnode_old;
 		std::vector<object*> selectnode_new;
 		std::vector<arrow*> arrow_new;
@@ -165,8 +187,7 @@ public:
 			l.push_back(newnode);
 			selectnode_new.push_back(newnode);
 		}
-		for (auto i : l)
-		{
+		for (auto i : l) {
 			if (i->isalive(generation) && i->getobjectkind() == OBJECT_ARROW) {
 				arrow* a = (arrow*)i;
 				if (a->start && a->end && (a->start->isselect(generation) || a->end->isselect(generation))) {
@@ -191,6 +212,50 @@ public:
 		for (auto i : arrow_new) {
 			l.push_back(i);
 		}
+
+		if (selectnode_new.size() == 1) {
+			// 入ってくるarrowも出ていくarrowもない場合で、mainselectがarrow（arrow_newでない）の上の場合は繋げる
+			std::vector<arrow*> arrow_in;
+			std::vector<arrow*> arrow_out;
+			for (auto i : arrow_new) {
+				if (i->start && std::find(selectnode_new.begin(), selectnode_new.end(), i->start) == selectnode_new.end()) { // 見つからない場合
+					arrow_out.push_back(i);
+				}
+				
+				if (i->end && std::find(selectnode_new.begin(), selectnode_new.end(), i->end) == selectnode_new.end()) { // 見つからない場合
+					arrow_in.push_back(i);
+				}
+			}
+			if (arrow_in.size() == 0 && arrow_out.size() == 0) {
+				arrow* a1 = 0;
+				arrow* a2 = 0;
+				for (auto i : l) {
+					if (i->isalive(generation) && i->getobjectkind() == OBJECT_ARROW) {
+						arrow* a = (arrow*)i;
+						if (std::find(arrow_new.begin(), arrow_new.end(), a) == arrow_new.end()) { // 見つからない場合
+							if (a->hit(g, &selectnode_new[0]->p, generation, 64.0f)) {
+								a->kill(generation);
+								a1 = a->copy(generation);
+								a2 = a->copy(generation);
+								a1->end = (node*)selectnode_new[0];
+								a1->end_pos = CONNECT_TOP;
+								a2->start = (node*)selectnode_new[0];
+								a2->start_pos = CONNECT_BOTTOM;
+								break;
+							}
+						}
+					}
+				}
+				if (a1) {
+					l.push_back(a1);
+				}
+				if (a2) {
+					l.push_back(a2);
+				}
+			}
+		}
+
+
 	}
 	void allnodemargin(point* p1, point* p2, UINT64 generation) const {
 		p1->x = DBL_MAX;

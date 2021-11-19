@@ -4,6 +4,12 @@
 #include "node.h"
 #include "connectpoint.h"
 
+#if _DEBUG
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#define new new(_NORMAL_BLOCK, __FILE__, __LINE__)
+#endif
+
 class arrow : public object {
 public:
 	node* start;
@@ -64,7 +70,7 @@ public:
 				pSink->EndFigure(D2D1_FIGURE_END_OPEN);
 				pSink->Close();
 				SafeRelease(&pSink);
-				g->m_pRenderTarget->DrawGeometry(pPathGeometry, select ? g->m_pSelectBrush : g->m_pNormalBrush, 4.0f);
+				g->m_pRenderTarget->DrawGeometry(pPathGeometry, running ? g->m_pRunningBrush : select ? g->m_pSelectBrush : g->m_pNormalBrush, 4.0f);
 				SafeRelease(&pPathGeometry);
 			}
 			// 矢印の描画
@@ -79,14 +85,14 @@ public:
 				pSink->EndFigure(D2D1_FIGURE_END_CLOSED);
 				pSink->Close();
 				SafeRelease(&pSink);
-				g->m_pRenderTarget->FillGeometry(pPathGeometry, select ? g->m_pSelectBrush : g->m_pNormalBrush);
-				g->m_pRenderTarget->DrawGeometry(pPathGeometry, select ? g->m_pSelectBrush : g->m_pNormalBrush, 4.0f);
+				g->m_pRenderTarget->FillGeometry(pPathGeometry, running ? g->m_pRunningBrush : select ? g->m_pSelectBrush : g->m_pNormalBrush);
+				g->m_pRenderTarget->DrawGeometry(pPathGeometry, running ? g->m_pRunningBrush : select ? g->m_pSelectBrush : g->m_pNormalBrush, 4.0f);
 				SafeRelease(&pPathGeometry);
 			}
 			g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 		}
 	}
-	virtual bool hit(const graphic* g, const point* p, UINT64 generation) const override { // 書き直す必要あり
+	virtual bool hit(const graphic* g, const point* p, UINT64 generation, const float offset = 16.0f) const override { // 書き直す必要あり
 		if (isalive(generation) && start && end) {
 
 			D2D1_POINT_2F c1, c2, c3, c4;
@@ -123,7 +129,7 @@ public:
 					pSink->Close();
 					pPathGeometry->StrokeContainsPoint(
 						D2D1::Point2F((FLOAT)p->x, (FLOAT)p->y),
-						16,     // stroke width
+						offset,     // stroke width
 						NULL,   // stroke style
 						NULL,   // world transform
 						&containsPoint
@@ -146,7 +152,7 @@ public:
 					pSink->Close();
 					pPathGeometry->StrokeContainsPoint(
 						D2D1::Point2F((FLOAT)p->x, (FLOAT)p->y),
-						16,     // stroke width
+						offset,     // stroke width
 						NULL,   // stroke style
 						NULL,   // world transform
 						&containsPoint
@@ -159,7 +165,7 @@ public:
 		}
 		return false;
 	}
-	virtual bool inrect(const point* p1, const point* p2, UINT64 generation) const override { // 書き直す必要あり
+	virtual bool inrect(const point* p1, const point* p2, UINT64 generation, const float offset = 16.0f) const override { // 書き直す必要あり
 		if (isalive(generation) && start && end) {
 			if (
 				p1->x <= min(start->p.x, end->p.x) && max(start->p.x, end->p.x) <= p2->x &&

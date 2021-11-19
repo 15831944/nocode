@@ -3,6 +3,12 @@
 #include "node.h"
 #include "common.h"
 
+#if _DEBUG
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#define new new(_NORMAL_BLOCK, __FILE__, __LINE__)
+#endif
+
 class node_output :public node
 {
 public:
@@ -27,7 +33,7 @@ public:
 	virtual NODE_KIND getnodekind() const {
 		return NODE_OUTPUT;
 	};
-	virtual bool execute() const override {
+	virtual bool execute(bool*) const override {
 		if (g_c.hOutput && IsWindow(g_c.hOutput)) {
 			HWND hEdit = GetTopWindow(g_c.hOutput);
 			if (hEdit && pl->l[0]->value && pl->l[0]->value->size() > 0) {

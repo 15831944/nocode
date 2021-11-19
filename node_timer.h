@@ -16,6 +16,8 @@ public:
 			pi->sethelp(L"•b”‚ðŽw’è‚µ‚Ä‚­‚¾‚³‚¢B");
 			pi->setdescription(L"Žw’è‚³‚ê‚½•b”‘Ò‚¿‚Ü‚·B");
 			pi->setvalue(L"3");
+			pi->setmatch(L"[0-9]*");
+			pi->setunit(L"•b");
 			pl->l.push_back(pi);
 		}
 
@@ -28,13 +30,20 @@ public:
 	virtual NODE_KIND getnodekind() const {
 		return NODE_TIMER;
 	};
-	virtual bool execute() const override {
+	virtual bool execute(bool* exit) const override {
 		// ‰½‚à‚µ‚È‚¢
 
 		if (pl->l[0]->value && pl->l[0]->value->size() > 0)
 		{
 			int sec = _wtoi(pl->l[0]->value->c_str());
-			Sleep(sec * 1000);
+			for (int i = 0; i < sec; i++)
+			{
+				Sleep(1000);
+				if (*exit)
+				{
+					break;
+				}
+			}
 		}
 
 		return true;

@@ -14,6 +14,12 @@
 #include "util.h"
 #include "resource.h"
 
+#if _DEBUG
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#define new new(_NORMAL_BLOCK, __FILE__, __LINE__)
+#endif
+
 #define ZOOM_MAX 100.0
 #define ZOOM_MIN 0.1
 #define ZOOM_STEP 1.20
@@ -244,7 +250,10 @@ public:
 			if (dragjudge) {
 				dragjudge = false;
 				beginedit();
-				nl.selectoffsetmerge(&dragoffset, generation);
+				point p1{ (double)x, (double)y };
+				point p2;
+				t.d2l(&p1, &p2);
+				nl.selectoffsetmerge(g_c.g, &p2, &dragoffset, generation);
 			}
 			else if (dd && dd->isselect(generation))
 			{
@@ -596,7 +605,7 @@ public:
 	}
 
 	void OnAllselect() {
-		nl.allselect(generation);
+		nl.allselect(true, generation);
 		OnProperty();
 		RefreshToolBar();
 		InvalidateRect(hWnd, NULL, FALSE);
@@ -771,14 +780,13 @@ public:
 						case PROPERTY_INT:
 							CreateWindowEx(0, L"STATIC", (i->name) ? ((*i->name + L":").c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_CENTERIMAGE, 0, nYtop, POINT2PIXEL(64), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							{
-								HWND hEdit = CreateWindowEx(WS_EX_STATICEDGE, RICHEDIT_CLASSW, 0, WS_VISIBLE | WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL | ES_NOHIDESEL | ES_NUMBER, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
+								HWND hEdit = CreateWindowEx(WS_EX_STATICEDGE, RICHEDIT_CLASSW, 0, WS_VISIBLE | WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL | ES_NOHIDESEL, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 								SendMessage(hEdit, EM_SETEDITSTYLE, SES_EMULATESYSEDIT, SES_EMULATESYSEDIT);
 								SendMessage(hEdit, EM_SETEVENTMASK, 0, ENM_UPDATE);
 								SendMessage(hEdit, EM_LIMITTEXT, -1, 0);
 								util::DefaultRichEditProc = (WNDPROC)SetWindowLongPtr(hEdit, GWLP_WNDPROC, (LONG_PTR)RichEditProc);
 								SetWindowText(hEdit, (i->value) ? (i->value->c_str()) : 0);
 							}
-							//CreateWindowEx(WS_EX_CLIENTEDGE, L"EDIT", (i->value) ? (i->value->c_str()) : 0, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_WANTRETURN, POINT2PIXEL(64), nYtop + POINT2PIXEL(3), POINT2PIXEL(128 + 32), POINT2PIXEL(28) - POINT2PIXEL(3), hDlg, (HMENU)(1000 + index), GetModuleHandle(0), 0);
 							CreateWindowEx(0, L"STATIC", (i->unit) ? (i->unit->c_str()) : 0, WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, POINT2PIXEL(64 + 128 + 32), nYtop, POINT2PIXEL(32), POINT2PIXEL(28), hDlg, 0, GetModuleHandle(0), 0);
 							nYtop += POINT2PIXEL(32);
 							break;
@@ -974,9 +982,12 @@ public:
 	{
 		bool bIsEndNodeLast = true;
 		app* a = (app*)p;
+		std::vector<object*> select;
 		if (a) {
+			a->nl.selectlistup(&select, a->generation);
+			a->nl.allselect(false, a->generation);
 			node* start = 0;
-			for(auto i : a->nl.l) {
+			for (auto i : a->nl.l) {
 				if (i->isalive(a->generation) && i->getobjectkind() == OBJECT_NODE) {
 					node* n = (node*)i;
 					if (n->getnodekind() == NODE_START) {
@@ -991,23 +1002,51 @@ public:
 				}
 			}
 			if (start == 0) {
-				a->Error(L"開始ノードが見つかりませんでした。。1つ開始ノードを配置してください。");
+				a->Error(L"開始ノードが見つかりませんでした。開始ノードを配置してください。");
 				goto EXIT0;
 			}
 			bIsEndNodeLast = false;
 			while (start)
 			{
-				start->execute();
-				if (start->getnodekind() == NODE_END) {
+				start->setrunning(true, a->generation);
+				if (a->hWnd && IsWindow(a->hWnd)) {
+					InvalidateRect(a->hWnd, 0, FALSE);
+				}
+				start->execute(&a->bForceExit);
+				start->setrunning(false, a->generation);
+				if (a->hWnd && IsWindow(a->hWnd)) {
+					InvalidateRect(a->hWnd, 0, FALSE);
+				}
+				if (start->getnodekind() == NODE_END || a->bForceExit) {
 					bIsEndNodeLast = true;
 					break;
 				}
-				start = start->next_node(a->nl.l, a->generation);
+
+				arrow* nexta = (arrow*)start->next_arrow(a->nl.l, a->generation);
+				if (nexta) {
+					nexta->setrunning(true, a->generation);
+					if (a->hWnd && IsWindow(a->hWnd)) {
+						InvalidateRect(a->hWnd, 0, FALSE);
+					}
+					Sleep(100);
+					nexta->setrunning(false, a->generation);
+					if (a->hWnd && IsWindow(a->hWnd)) {
+						InvalidateRect(a->hWnd, 0, FALSE);
+					}
+					start = start->next_node(a->nl.l, a->generation);
+				}
+				else
+				{
+					break;
+				}
 			}
 		}
-
 	EXIT0:
-
+		if (a) {
+			for (auto i : select) {
+				i->setselect(true, a->generation);
+			}
+		}
 		if (bIsEndNodeLast && a->hWnd && IsWindow(a->hWnd)) {
 			PostMessage((HWND)a->hWnd, WM_APP + 1, 0, 0);
 		}
