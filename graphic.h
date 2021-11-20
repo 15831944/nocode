@@ -37,6 +37,8 @@ public:
 	ID2D1SolidColorBrush* m_pGridBrush;
 	ID2D1SolidColorBrush* m_pConnectPointBrush;
 	ID2D1SolidColorBrush* m_pConnectPointBkBrush;
+	ID2D1DeviceContext* m_pDeviceContext;
+
 	graphic(HWND hWnd)
 		: m_pD2DFactory(0)
 		, m_pWICFactory(0)
@@ -52,6 +54,7 @@ public:
 		, m_pGridBrush(0)
 		, m_pConnectPointBrush(0)
 		, m_pConnectPointBkBrush(0)
+		, m_pDeviceContext(0)
 	{
 		static const FLOAT msc_fontSize = 25;
 
@@ -82,6 +85,7 @@ public:
 		SafeRelease(&m_pGridBrush);
 		SafeRelease(&m_pConnectPointBrush);
 		SafeRelease(&m_pConnectPointBkBrush);
+		SafeRelease(&m_pDeviceContext);
 	}
 	bool begindraw(HWND hWnd) {
 		HRESULT hr = S_OK;
@@ -109,6 +113,8 @@ public:
 				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.00f), &m_pConnectPointBrush);
 			if (SUCCEEDED(hr))
 				hr = m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.75f), &m_pConnectPointBkBrush);
+			if (SUCCEEDED(hr))
+				hr = m_pRenderTarget->QueryInterface(&m_pDeviceContext);
 		}
 		if (SUCCEEDED(hr))
 		{
@@ -130,6 +136,7 @@ public:
 			SafeRelease(&m_pGridBrush);
 			SafeRelease(&m_pConnectPointBrush);
 			SafeRelease(&m_pConnectPointBkBrush);
+			SafeRelease(&m_pDeviceContext);
 		}
 	}
 };

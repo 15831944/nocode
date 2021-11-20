@@ -221,7 +221,7 @@ public:
 				if (i->start && std::find(selectnode_new.begin(), selectnode_new.end(), i->start) == selectnode_new.end()) { // Œ©‚Â‚©‚ç‚È‚¢ê‡
 					arrow_out.push_back(i);
 				}
-				
+
 				if (i->end && std::find(selectnode_new.begin(), selectnode_new.end(), i->end) == selectnode_new.end()) { // Œ©‚Â‚©‚ç‚È‚¢ê‡
 					arrow_in.push_back(i);
 				}
@@ -238,9 +238,43 @@ public:
 								a1 = a->copy(generation);
 								a2 = a->copy(generation);
 								a1->end = (node*)selectnode_new[0];
-								a1->end_pos = CONNECT_TOP;
+								switch (a1->start_pos)
+								{
+								case CONNECT_TOP:
+									a1->end_pos = CONNECT_BOTTOM;
+									break;
+								case CONNECT_BOTTOM:
+									a1->end_pos = CONNECT_TOP;
+									break;
+								case CONNECT_LEFT:
+									a1->end_pos = CONNECT_RIGHT;
+									break;
+								case CONNECT_RIGHT:
+									a1->end_pos = CONNECT_LEFT;
+									break;
+								default:
+									a1->end_pos = CONNECT_BOTTOM;
+									break;
+								}
 								a2->start = (node*)selectnode_new[0];
-								a2->start_pos = CONNECT_BOTTOM;
+								switch (a2->end_pos)
+								{
+								case CONNECT_TOP:
+									a2->start_pos = CONNECT_BOTTOM;
+									break;
+								case CONNECT_BOTTOM:
+									a2->start_pos = CONNECT_TOP;
+									break;
+								case CONNECT_LEFT:
+									a2->start_pos = CONNECT_RIGHT;
+									break;
+								case CONNECT_RIGHT:
+									a2->start_pos = CONNECT_LEFT;
+									break;
+								default:
+									a2->start_pos = CONNECT_BOTTOM;
+									break;
+								}
 								break;
 							}
 						}
@@ -254,9 +288,42 @@ public:
 				}
 			}
 		}
-
-
 	}
+
+	static void getconnectpoint(const point* p1, const point* p2, CONNECT_POSITION* c1, CONNECT_POSITION* c2) {
+		const double xdiff = p1->x - p2->x;
+		const double ydiff = p1->y - p2->y;
+
+		if (abs(xdiff) <= abs(ydiff))
+		{
+			if (ydiff <= 0)
+			{
+				// «
+				*c1 = CONNECT_BOTTOM;
+				*c2 = CONNECT_TOP;
+			}
+			else
+			{
+				 *c1 = CONNECT_TOP;
+				 *c2 = CONNECT_BOTTOM;
+			}
+		}
+		else
+		{
+			if (xdiff <= 0)
+			{
+				// 
+				*c1 = CONNECT_RIGHT;
+				*c2 = CONNECT_LEFT;
+			}
+			else
+			{
+				*c1 = CONNECT_LEFT;
+				*c2 = CONNECT_RIGHT;
+			}
+		}
+	}
+
 	void allnodemargin(point* p1, point* p2, UINT64 generation) const {
 		p1->x = DBL_MAX;
 		p1->y = DBL_MAX;

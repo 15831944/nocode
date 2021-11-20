@@ -12,7 +12,7 @@
 
 #define NODE_WIDTH 200
 #define NODE_HEIGHT 100
-#define CONNECT_POINT_WIDTH 8.0f
+#define CONNECT_POINT_WIDTH 16.0f
 
 enum NODE_KIND {
 	NODE_NONE,
@@ -38,11 +38,15 @@ enum NODE_KIND {
 class node : public object {
 public:
 	WCHAR name[16];
-	node(UINT64 initborn) : object(initborn), name{} {
+	int m_maxinconnect;
+	int m_maxoutconnect;
+	node(UINT64 initborn) : object(initborn), name{}, m_maxinconnect(INT_MAX), m_maxoutconnect(1) {
 		s = { NODE_WIDTH, NODE_HEIGHT };
 	}
 	node(const node* src, UINT64 initborn) : object(src, initborn) {
 		lstrcpy(name, src->name);
+		m_maxinconnect = src->m_maxinconnect;
+		m_maxoutconnect = src->m_maxoutconnect;
 	}
 	virtual ~node() {
 	}
@@ -134,4 +138,8 @@ public:
 	virtual NODE_KIND getnodekind() const = 0;
 	virtual object* next_arrow(std::list<object*> l, UINT64 generation);
 	virtual node* next_node(std::list<object*> l, UINT64 generation);
+	virtual int getinconnectcount(std::list<object*> l, UINT64 generation) const;
+	virtual int getoutconnectcount(std::list<object*> l, UINT64 generation) const;
+	virtual bool caninconnect(std::list<object*> l, UINT64 generation) const;
+	virtual bool canoutconnect(std::list<object*> l, UINT64 generation) const;
 };

@@ -41,23 +41,59 @@ public:
 			);
 			D2D1_POINT_2F c1, c2, c3, c4;
 			D2D1_POINT_2F t1, t2, t3;
-			// たて⇔たて
-			if (start->p.y < end->p.y) {
+			if (start_pos == CONNECT_RIGHT && end_pos == CONNECT_LEFT) {
+				c1 = { (float)(start->p.x + NODE_WIDTH / 2.0 + (offset ? offset->x : 0.0)), (float)(start->p.y + (offset ? offset->y : 0.0)) };
+				c4 = { (float)(end->p.x - NODE_WIDTH / 2.0 - nArrowSize - 5.0f + (offset ? offset->x : 0.0)), (float)(end->p.y + (offset ? offset->y : 0.0)) };
+				t1 = { c4.x + nArrowSize , c4.y};
+				t2 = { t1.x - nArrowSize ,t1.y - nArrowWidth };
+				t3 = { t1.x - nArrowSize ,t1.y + nArrowWidth };
+				c2 = { (float)((3.0 * c4.x + c1.x) / 4.0), c1.y };
+				c3 = { (float)((3.0 * c1.x + c4.x) / 4.0), c4.y };
+			}
+			else if (start_pos == CONNECT_LEFT && end_pos == CONNECT_RIGHT ) {
+				c4 = { (float)(start->p.x - NODE_WIDTH / 2.0 + (offset ? offset->x : 0.0)), (float)(start->p.y + (offset ? offset->y : 0.0)) };
+				c1 = { (float)(end->p.x + NODE_WIDTH / 2.0 + nArrowSize + 5.0f + (offset ? offset->x : 0.0)), (float)(end->p.y + (offset ? offset->y : 0.0)) };
+				t1 = { c1.x - nArrowSize, c1.y };
+				t2 = { t1.x + nArrowSize ,t1.y - nArrowWidth };
+				t3 = { t1.x + nArrowSize ,t1.y + nArrowWidth };
+				c2 = { (float)((3.0 * c4.x + c1.x) / 4.0), c1.y };
+				c3 = { (float)((3.0 * c1.x + c4.x) / 4.0), c4.y };
+			}
+			else if (start_pos == CONNECT_BOTTOM && end_pos == CONNECT_TOP) {
 				c1 = { (float)(start->p.x + (offset ? offset->x : 0.0)), (float)(start->p.y + NODE_HEIGHT / 2.0 + (offset ? offset->y : 0.0)) };
 				c4 = { (float)(end->p.x + (offset ? offset->x : 0.0)), (float)(end->p.y - NODE_HEIGHT / 2.0 - nArrowSize - 5.0f + (offset ? offset->y : 0.0)) };
 				t1 = { c4.x, c4.y + nArrowSize };
 				t2 = { t1.x - nArrowWidth,t1.y - nArrowSize };
 				t3 = { t1.x + nArrowWidth,t1.y - nArrowSize };
+				c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
+				c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
 			}
-			else {
+			else if (start_pos == CONNECT_TOP && end_pos == CONNECT_BOTTOM) {
 				c4 = { (float)(start->p.x + (offset ? offset->x : 0.0)), (float)(start->p.y - NODE_HEIGHT / 2.0 + (offset ? offset->y : 0.0)) };
 				c1 = { (float)(end->p.x + (offset ? offset->x : 0.0)), (float)(end->p.y + NODE_HEIGHT / 2.0 + nArrowSize + 5.0f + (offset ? offset->y : 0.0)) };
 				t1 = { c1.x, c1.y - nArrowSize };
 				t2 = { t1.x - nArrowWidth,t1.y + nArrowSize };
 				t3 = { t1.x + nArrowWidth,t1.y + nArrowSize };
+				c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
+				c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
+			} else {
+				if (start->p.y < end->p.y) {
+					c1 = { (float)(start->p.x + (offset ? offset->x : 0.0)), (float)(start->p.y + NODE_HEIGHT / 2.0 + (offset ? offset->y : 0.0)) };
+					c4 = { (float)(end->p.x + (offset ? offset->x : 0.0)), (float)(end->p.y - NODE_HEIGHT / 2.0 - nArrowSize - 5.0f + (offset ? offset->y : 0.0)) };
+					t1 = { c4.x, c4.y + nArrowSize };
+					t2 = { t1.x - nArrowWidth,t1.y - nArrowSize };
+					t3 = { t1.x + nArrowWidth,t1.y - nArrowSize };
+				}
+				else {
+					c4 = { (float)(start->p.x + (offset ? offset->x : 0.0)), (float)(start->p.y - NODE_HEIGHT / 2.0 + (offset ? offset->y : 0.0)) };
+					c1 = { (float)(end->p.x + (offset ? offset->x : 0.0)), (float)(end->p.y + NODE_HEIGHT / 2.0 + nArrowSize + 5.0f + (offset ? offset->y : 0.0)) };
+					t1 = { c1.x, c1.y - nArrowSize };
+					t2 = { t1.x - nArrowWidth,t1.y + nArrowSize };
+					t3 = { t1.x + nArrowWidth,t1.y + nArrowSize };
+				}
+				c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
+				c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
 			}
-			c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
-			c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
 			ID2D1PathGeometry* pPathGeometry;
 			// 線分の描画
 			g->m_pD2DFactory->CreatePathGeometry(&pPathGeometry);
@@ -92,28 +128,65 @@ public:
 			g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 		}
 	}
-	virtual bool hit(const graphic* g, const point* p, UINT64 generation, const float offset = 16.0f) const override { // 書き直す必要あり
+	virtual bool hit(const graphic* g, const point* p, UINT64 generation, const float offset) const override { // 書き直す必要あり
 		if (isalive(generation) && start && end) {
 
 			D2D1_POINT_2F c1, c2, c3, c4;
 			D2D1_POINT_2F t1, t2, t3;
-			// たて⇔たて
-			if (start->p.y < end->p.y) {
-				c1 = { (float)(start->p.x), (float)(start->p.y + NODE_HEIGHT / 2.0) };
-				c4 = { (float)(end->p.x), (float)(end->p.y - NODE_HEIGHT / 2.0 - nArrowSize - 5.0f) };
+			if (start_pos == CONNECT_RIGHT && end_pos == CONNECT_LEFT) {
+				c1 = { (float)(start->p.x + NODE_WIDTH / 2.0), (float)(start->p.y)};
+				c4 = { (float)(end->p.x - NODE_WIDTH / 2.0 - nArrowSize - 5.0f ), (float)(end->p.y ) };
+				t1 = { c4.x + nArrowSize , c4.y };
+				t2 = { t1.x - nArrowSize ,t1.y - nArrowWidth };
+				t3 = { t1.x - nArrowSize ,t1.y + nArrowWidth };
+				c2 = { (float)((3.0 * c4.x + c1.x) / 4.0), c1.y };
+				c3 = { (float)((3.0 * c1.x + c4.x) / 4.0), c4.y };
+			}
+			else if (start_pos == CONNECT_LEFT && end_pos == CONNECT_RIGHT) {
+				c4 = { (float)(start->p.x - NODE_WIDTH / 2.0 ), (float)(start->p.y ) };
+				c1 = { (float)(end->p.x + NODE_WIDTH / 2.0 + nArrowSize + 5.0f ), (float)(end->p.y ) };
+				t1 = { c1.x - nArrowSize, c1.y };
+				t2 = { t1.x + nArrowSize ,t1.y - nArrowWidth };
+				t3 = { t1.x + nArrowSize ,t1.y + nArrowWidth };
+				c2 = { (float)((3.0 * c4.x + c1.x) / 4.0), c1.y };
+				c3 = { (float)((3.0 * c1.x + c4.x) / 4.0), c4.y };
+			}
+			else if (start_pos == CONNECT_BOTTOM && end_pos == CONNECT_TOP) {
+				c1 = { (float)(start->p.x ), (float)(start->p.y + NODE_HEIGHT / 2.0 ) };
+				c4 = { (float)(end->p.x ), (float)(end->p.y - NODE_HEIGHT / 2.0 - nArrowSize - 5.0f ) };
 				t1 = { c4.x, c4.y + nArrowSize };
 				t2 = { t1.x - nArrowWidth,t1.y - nArrowSize };
 				t3 = { t1.x + nArrowWidth,t1.y - nArrowSize };
+				c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
+				c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
 			}
-			else {
-				c4 = { (float)(start->p.x), (float)(start->p.y - NODE_HEIGHT / 2.0) };
-				c1 = { (float)(end->p.x), (float)(end->p.y + NODE_HEIGHT / 2.0 + nArrowSize + 5.0f) };
+			else if (start_pos == CONNECT_TOP && end_pos == CONNECT_BOTTOM) {
+				c4 = { (float)(start->p.x ), (float)(start->p.y - NODE_HEIGHT / 2.0 ) };
+				c1 = { (float)(end->p.x ), (float)(end->p.y + NODE_HEIGHT / 2.0 + nArrowSize + 5.0f ) };
 				t1 = { c1.x, c1.y - nArrowSize };
 				t2 = { t1.x - nArrowWidth,t1.y + nArrowSize };
 				t3 = { t1.x + nArrowWidth,t1.y + nArrowSize };
+				c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
+				c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
 			}
-			c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
-			c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
+			else {
+				if (start->p.y < end->p.y) {
+					c1 = { (float)(start->p.x ), (float)(start->p.y + NODE_HEIGHT / 2.0 ) };
+					c4 = { (float)(end->p.x ), (float)(end->p.y - NODE_HEIGHT / 2.0 - nArrowSize - 5.0f ) };
+					t1 = { c4.x, c4.y + nArrowSize };
+					t2 = { t1.x - nArrowWidth,t1.y - nArrowSize };
+					t3 = { t1.x + nArrowWidth,t1.y - nArrowSize };
+				}
+				else {
+					c4 = { (float)(start->p.x ), (float)(start->p.y - NODE_HEIGHT / 2.0 ) };
+					c1 = { (float)(end->p.x ), (float)(end->p.y + NODE_HEIGHT / 2.0 + nArrowSize + 5.0f ) };
+					t1 = { c1.x, c1.y - nArrowSize };
+					t2 = { t1.x - nArrowWidth,t1.y + nArrowSize };
+					t3 = { t1.x + nArrowWidth,t1.y + nArrowSize };
+				}
+				c2 = { c1.x, (float)((3.0 * c4.y + c1.y) / 4.0) };
+				c3 = { c4.x, (float)((3.0 * c1.y + c4.y) / 4.0) };
+			}
 
 			BOOL containsPoint = FALSE;
 			{

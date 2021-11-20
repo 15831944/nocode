@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <Richedit.h>
+#include <InitGuid.h>
 #include <regex>
 #include "trans.h"
 #include "objectlist.h"
@@ -38,7 +39,6 @@ public:
 	point dragstartL;
 	point dragoffset;
 	bool dragjudge;
-	bool modify;
 	object* dd; // ドラッグ中ノード
 	HWND hWnd;
 	UINT uDpiX, uDpiY;
@@ -64,6 +64,11 @@ public:
 	void RefreshToolBar() {
 		if (bIsRunning)
 		{
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_NEW, FALSE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_OPEN, FALSE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_SAVE, FALSE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_EXIT, FALSE);
+
 			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_UNDO, FALSE);
 			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_REDO, FALSE);
 			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_COPY, FALSE);
@@ -80,6 +85,11 @@ public:
 		}
 		else
 		{
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_NEW,  TRUE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_OPEN, TRUE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_SAVE, TRUE);
+			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_EXIT, TRUE);
+
 			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_UNDO, CanUndo());
 			SendMessage(g_c.hTool, TB_ENABLEBUTTON, ID_REDO, CanRedo());
 			bool selected = nl.selectcount(generation) > 0;
@@ -124,7 +134,6 @@ public:
 		, dragstartL{}
 		, dragoffset{}
 		, dragjudge(false)
-		, modify(false)
 		, dd(nullptr)
 		, hWnd(0)
 		, uDpiX(DEFAULT_DPI)
@@ -213,7 +222,6 @@ public:
 			pt2 = cp1.pt;
 			OnProperty();
 			mode = connection;
-			//MessageBox(hWnd, 0, 0, 0);
 		}
 		else if ((dd = nl.hit(g_c.g, &p2, generation)) != nullptr) {
 			if (GetKeyState(VK_CONTROL) < 0) {
@@ -275,7 +283,7 @@ public:
 			point p1{ (double)x, (double)y };
 			point p2;
 			t.d2l(&p1, &p2);
-			if ((dd = nl.hit(g_c.g, &p2, generation)) != nullptr && dd->getobjectkind() != OBJECT_ARROW)
+			if ((dd = nl.hit(g_c.g, &p2, generation)) != nullptr && dd->getobjectkind() != OBJECT_ARROW && dd != cp1.n)
 			{
 				bool bExistSameArrow = false;
 				for (auto i : nl.l)
@@ -296,9 +304,8 @@ public:
 					nl.unselect(generation);
 					arrow* newarrow = new arrow(generation);
 					newarrow->start = (node*)cp1.n;
-					newarrow->start_pos = cp1.connect_position;
 					newarrow->end = (node*)dd;
-					newarrow->end_pos = CONNECT_TOP;
+					objectlist::getconnectpoint(&newarrow->start->p, &newarrow->end->p, &newarrow->start_pos, &newarrow->end_pos);
 					newarrow->select = true;
 					nl.add(newarrow);
 					OnProperty();
@@ -446,11 +453,21 @@ public:
 			point p2;
 			t.d2l(&p1, &p2);
 
-			object* dd = nl.hit(g_c.g, &p2, generation);
-			if (dd && dd->getobjectkind() != OBJECT_ARROW)
-			{
+			static object* temp_select = 0;
 
+			object* dd = nl.hit(g_c.g, &p2, generation);
+			if (dd && dd->getobjectkind() != OBJECT_ARROW && dd != cp1.n)
+			{
+				if (temp_select && dd != temp_select)
+				{
+					temp_select->setselect(false, generation);
+				}
 				dd->setselect(true, generation);
+				temp_select = dd;
+			}
+			else if (temp_select)
+			{
+				temp_select->setselect(false, generation);
 			}
 
 			pt2 = p2;
@@ -491,7 +508,21 @@ public:
 					);
 					D2D1_POINT_2F s = { (float)pt1.x, (float)pt1.y };
 					D2D1_POINT_2F e = { (float)pt2.x, (float)pt2.y };
-					g_c.g->m_pRenderTarget->DrawLine(s, e, g_c.g->m_pSelectBkBrush, 4.0f);
+					//if (g_c.g->m_pDeviceContext) {
+					//	ID2D1Effect* gaussianBlurEffect = 0;
+					//	g_c.g->m_pDeviceContext->CreateEffect(CLSID_D2D1GaussianBlur, &gaussianBlurEffect);
+					//	if (gaussianBlurEffect) {
+					//		gaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_SOFT);
+					//		gaussianBlurEffect->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, 50.0f);
+					//		g_c.g->m_pDeviceContext->DrawLine(s, e, g_c.g->m_pSelectBkBrush, 8.0f);
+					//		gaussianBlurEffect->Release();
+					//		gaussianBlurEffect = 0;
+					//	}
+					//}
+					//else
+					//{
+						g_c.g->m_pRenderTarget->DrawLine(s, e, g_c.g->m_pSelectBkBrush, 8.0f);
+					//}
 					g_c.g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 				}
 				g_c.g->enddraw();
@@ -612,8 +643,8 @@ public:
 	}
 
 	void OnNew() {
-		if (modify) {
-			if (MessageBox(hWnd, L"新規作成しますか？", L"確認", MB_YESNO) == IDNO)
+		if (generation > 0) {
+			if (MessageBox(hWnd, L"新規作成しますか？", L"確認", MB_YESNOCANCEL | MB_ICONINFORMATION) != IDYES)
 				return;
 		}
 		// 初期化
@@ -754,7 +785,7 @@ public:
 		return FALSE;
 	}
 
-	static INT_PTR CALLBACK DialogProc(HWND hDlg, unsigned msg, WPARAM wParam, LPARAM lParam)
+	static INT_PTR CALLBACK PropertyDialogProc(HWND hDlg, unsigned msg, WPARAM wParam, LPARAM lParam)
 	{
 		static app* pNoCodeApp;
 		static bool enable_edit_event;
@@ -942,19 +973,19 @@ public:
 		switch (GetSelectObjectKind()) {
 		case OBJECT_NODE:
 			DestroyWindow(GetTopWindow(g_c.hPropContainer));
-			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), g_c.hPropContainer, DialogProc, (LPARAM)this);
+			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NORMAL), g_c.hPropContainer, PropertyDialogProc, (LPARAM)this);
 			break;
 		case OBJECT_MULTI:
 			DestroyWindow(GetTopWindow(g_c.hPropContainer));
-			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_MULTI), g_c.hPropContainer, DialogProc, (LPARAM)0);
+			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_MULTI), g_c.hPropContainer, PropertyDialogProc, (LPARAM)0);
 			break;
 		case OBJECT_NONE:
 		default:
 			DestroyWindow(GetTopWindow(g_c.hPropContainer));
-			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NONE), g_c.hPropContainer, DialogProc, (LPARAM)0);
+			CreateDialogParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_PROPERTY_NONE), g_c.hPropContainer, PropertyDialogProc, (LPARAM)0);
 			break;
 		}
-		SetFocus(g_c.hPropContainer);
+		SetFocus(g_c.hMainWnd);//ダイアログの方にフォーカスが取られてアクセラレータが効かなくなるため
 	}
 
 	OBJECT_KIND GetSelectObjectKind() const {
@@ -1017,11 +1048,13 @@ public:
 				if (a->hWnd && IsWindow(a->hWnd)) {
 					InvalidateRect(a->hWnd, 0, FALSE);
 				}
-				if (start->getnodekind() == NODE_END || a->bForceExit) {
+				if (start->getnodekind() == NODE_END) {
 					bIsEndNodeLast = true;
 					break;
 				}
-
+				if (a->bForceExit) {
+					break;
+				}
 				arrow* nexta = (arrow*)start->next_arrow(a->nl.l, a->generation);
 				if (nexta) {
 					nexta->setrunning(true, a->generation);
@@ -1046,9 +1079,11 @@ public:
 			for (auto i : select) {
 				i->setselect(true, a->generation);
 			}
-		}
-		if (bIsEndNodeLast && a->hWnd && IsWindow(a->hWnd)) {
-			PostMessage((HWND)a->hWnd, WM_APP + 1, 0, 0);
+			if (bIsEndNodeLast || a->bForceExit) {
+				if (a->hWnd && IsWindow(a->hWnd)) {
+					PostMessage((HWND)a->hWnd, WM_APP + 1, 0, 0);
+				}
+			}
 		}
 
 		ExitThread(0);

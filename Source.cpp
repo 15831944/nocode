@@ -286,10 +286,10 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 				TV_INSERTSTRUCT tv = { 0 };
 				tv.hParent = TVI_ROOT;
 				tv.hInsertAfter = TVI_LAST;
-				tv.item.mask = TVIF_TEXT | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+				tv.item.mask = TVIF_TEXT | TVIF_IMAGE | TVIF_EXPANDEDIMAGE;
 				tv.item.pszText = TEXT("Root");
 				tv.item.iImage = 0;
-				tv.item.iSelectedImage = 1;
+				tv.itemex.iExpandedImage = 1;
 				hRootItem = TreeView_InsertItem(hTree, &tv);
 			}
 			// 子ノード1
@@ -350,6 +350,7 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
 					}
 				}
+				TreeView_Expand(hTree, hRootItem, TVE_EXPAND);
 			}
 		}
 		EnumChildWindows(hWnd, util::EnumChildSetFontProc, 0);
@@ -919,7 +920,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPWSTR pCmdLine, in
 	HACCEL hAccel = CreateAcceleratorTable(Accel, _countof(Accel));
 	while (GetMessage(&msg, 0, 0, 0))
 	{
-		if (!IsDialogMessage(g_c.hMainWnd, &msg) && !TranslateAccelerator(g_c.hMainWnd, hAccel, &msg))
+		if (!((GetFocus() == g_c.hOutput || IsChild(g_c.hOutput, msg.hwnd)) && IsDialogMessage(g_c.hOutput, &msg)) &&
+			!((GetFocus() == g_c.hNodeBox || IsChild(g_c.hNodeBox, msg.hwnd)) && IsDialogMessage(g_c.hNodeBox, &msg))&&
+			!((GetFocus() == g_c.hPropContainer || IsChild(g_c.hPropContainer, msg.hwnd)) && IsDialogMessage(g_c.hPropContainer, &msg))&&
+			!((GetFocus() == g_c.hVariableList || IsChild(g_c.hVariableList, msg.hwnd)) && IsDialogMessage(g_c.hVariableList, &msg))&&
+			!TranslateAccelerator(g_c.hMainWnd, hAccel, &msg))
 		{
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
