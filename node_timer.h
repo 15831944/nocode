@@ -32,7 +32,6 @@ public:
 	};
 	virtual bool execute(bool* exit) const override {
 		// ‰½‚à‚µ‚È‚¢
-
 		if (pl->l[0]->value && pl->l[0]->value->size() > 0)
 		{
 			int sec = _wtoi(pl->l[0]->value->c_str());
@@ -45,9 +44,8 @@ public:
 				}
 			}
 		}
-
 		return true;
 	}
-	virtual void save(HANDLE hFile) const {};
-	virtual void open(HANDLE hFile) const {};
+	virtual void save(HANDLE hFile) const override {};
+	virtual void open(HANDLE hFile) const override {};
 };

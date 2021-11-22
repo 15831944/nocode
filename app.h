@@ -1013,8 +1013,8 @@ public:
 	{
 		bool bIsEndNodeLast = true;
 		app* a = (app*)p;
-		std::vector<object*> select;
 		if (a) {
+			std::vector<object*> select;
 			a->nl.selectlistup(&select, a->generation);
 			a->nl.allselect(false, a->generation);
 			node* start = 0;
@@ -1073,17 +1073,19 @@ public:
 					break;
 				}
 			}
-		}
-	EXIT0:
-		if (a) {
+
+		EXIT0:
+
 			for (auto i : select) {
 				i->setselect(true, a->generation);
 			}
+
 			if (bIsEndNodeLast || a->bForceExit) {
 				if (a->hWnd && IsWindow(a->hWnd)) {
 					PostMessage((HWND)a->hWnd, WM_APP + 1, 0, 0);
 				}
 			}
+
 		}
 
 		ExitThread(0);

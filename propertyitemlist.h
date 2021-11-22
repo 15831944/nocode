@@ -9,7 +9,7 @@ public:
 	std::wstring description;
 	std::vector<propertyitem*> l;
 	propertyitemlist() : l{} {}
-	~propertyitemlist() {
+	virtual ~propertyitemlist() {
 		for (auto i : l) {
 			delete i;
 		}

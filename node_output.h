@@ -47,6 +47,6 @@ public:
 		}
 		return false;
 	}
-	virtual void save(HANDLE hFile) const {};
-	virtual void open(HANDLE hFile) const {};
+	virtual void save(HANDLE hFile) const override {};
+	virtual void open(HANDLE hFile) const override {};
 };

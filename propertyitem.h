@@ -37,7 +37,7 @@ public:
 		if (src->unit) unit = new std::wstring(*src->unit);
 		if (src->match) match = new std::wstring(*src->match);
 	}
-	~propertyitem() {
+	virtual ~propertyitem() {
 		delete name;
 		delete help;
 		delete description;

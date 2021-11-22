@@ -27,6 +27,7 @@
 #include "node_start.h"
 #include "node_end.h"
 #include "node_timer.h"
+#include "node_if.h"
 #include "resource.h"
 
 #if _DEBUG
@@ -338,6 +339,20 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 				}
 				{
 					node* n = new node_timer(0);
+					if (n) {
+						TV_INSERTSTRUCT tv = { 0 };
+						tv.hParent = hRootItem;
+						tv.hInsertAfter = TVI_LAST;
+						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+						tv.item.pszText = n->name;
+						tv.item.iImage = 2;
+						tv.item.iSelectedImage = 3;
+						tv.item.lParam = (LPARAM)n;
+						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
+					}
+				}
+				{
+					node* n = new node_if(0);
 					if (n) {
 						TV_INSERTSTRUCT tv = { 0 };
 						tv.hParent = hRootItem;
@@ -915,7 +930,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPWSTR pCmdLine, in
 		{FVIRTKEY | FCONTROL, 'Z', ID_UNDO},
 		{FVIRTKEY | FCONTROL, 'Y', ID_REDO},
 		{FVIRTKEY | FALT, VK_RETURN, ID_PROPERTY},
-		{FVIRTKEY | FCONTROL, VK_F5, ID_RUN},
+		{FVIRTKEY, VK_F5, ID_RUN},
 	};
 	HACCEL hAccel = CreateAcceleratorTable(Accel, _countof(Accel));
 	while (GetMessage(&msg, 0, 0, 0))

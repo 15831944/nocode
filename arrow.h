@@ -12,6 +12,7 @@
 
 class arrow : public object {
 public:
+	LPWSTR lpszText;
 	node* start;
 	node* end;
 	CONNECT_POSITION start_pos;
@@ -20,13 +21,23 @@ public:
 	const float nArrowSize = 16.0;
 	const float nArrowWidth = 8.0;
 
-	arrow(UINT64 initborn) : object(initborn), start(0), end(0), start_pos(CONNECT_NONE), end_pos(CONNECT_NONE) {}
+	arrow(UINT64 initborn) : object(initborn), start(0), end(0), start_pos(CONNECT_NONE), end_pos(CONNECT_NONE), lpszText(0) {}
 
-	arrow(const arrow* src, UINT64 initborn) : object(initborn) {
+	arrow(const arrow* src, UINT64 initborn) : object(initborn), lpszText(0) {
+		if (src->lpszText) {
+			lpszText = (LPWSTR)GlobalAlloc(0, sizeof(WCHAR) * (lstrlenW(src->lpszText) + 1));
+			if (lpszText) {
+				lstrcpyW(lpszText, src->lpszText);
+			}
+		}
 		start = src->start;
 		end = src->end;
 		start_pos = src->start_pos;
 		end_pos = src->end_pos;
+	}
+
+	~arrow() {
+		GlobalFree(lpszText);
 	}
 
 	virtual OBJECT_KIND getobjectkind() const {
@@ -124,6 +135,16 @@ public:
 				g->m_pRenderTarget->FillGeometry(pPathGeometry, running ? g->m_pRunningBrush : select ? g->m_pSelectBrush : g->m_pNormalBrush);
 				g->m_pRenderTarget->DrawGeometry(pPathGeometry, running ? g->m_pRunningBrush : select ? g->m_pSelectBrush : g->m_pNormalBrush, 4.0f);
 				SafeRelease(&pPathGeometry);
+			}
+			// •¶Žš‚Ì•`‰æ
+			if (lpszText) {
+				D2D1_RECT_F rect = {
+					(float)(p.x - s.w / 2 + (offset ? offset->x : 0.0)),
+					(float)(p.y - s.h / 2 + (offset ? offset->y : 0.0)),
+					(float)(p.x + s.w / 2 + (offset ? offset->x : 0.0)),
+					(float)(p.y + s.h / 2 + (offset ? offset->y : 0.0))
+				};
+				g->m_pRenderTarget->DrawText(lpszText, lstrlenW(lpszText), g->m_pTextFormat, &rect, running ? g->m_pRunningBrush : select ? g->m_pSelectBrush : g->m_pNormalBrush);
 			}
 			g->m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 		}
@@ -253,6 +274,6 @@ public:
 		arrow* n = new arrow(this, generation);
 		return n;
 	}
-	virtual void save(HANDLE hFile) const {};
-	virtual void open(HANDLE hFile) const {};
+	virtual void save(HANDLE hFile) const override {};
+	virtual void open(HANDLE hFile) const override {};
 };
