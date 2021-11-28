@@ -28,6 +28,8 @@
 #include "node_end.h"
 #include "node_timer.h"
 #include "node_if.h"
+#include "node_sound.h"
+#include "node_beep.h"
 #include "resource.h"
 
 #if _DEBUG
@@ -268,11 +270,15 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 	static HWND hTree;
 	static int flag;
 	static HIMAGELIST hImageList;
+	static HWND hEdit;
 	switch (msg)
 	{
 	case WM_INITDIALOG:
 		pNoCodeApp = (app*)lParam;
 		{
+			hEdit = CreateWindow(L"EDIT", 0, WS_VISIBLE | WS_CHILD, 0, 0, 0, 0, hWnd, 0, GetModuleHandle(0), 0);
+			SendMessage(hEdit, EM_LIMITTEXT, 0, 0);
+
 			hTree = CreateWindowEx(WS_EX_CLIENTEDGE, WC_TREEVIEW, 0, WS_CHILD | WS_VISIBLE | TVS_HASBUTTONS | TVS_LINESATROOT, 0, 0, 0, 0, hWnd, 0, GetModuleHandle(0), 0);
 
 			hImageList = ImageList_Create(32, 32, ILC_COLOR16, 4, 10);
@@ -353,6 +359,34 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 				}
 				{
 					node* n = new node_if(0);
+					if (n) {
+						TV_INSERTSTRUCT tv = { 0 };
+						tv.hParent = hRootItem;
+						tv.hInsertAfter = TVI_LAST;
+						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+						tv.item.pszText = n->name;
+						tv.item.iImage = 2;
+						tv.item.iSelectedImage = 3;
+						tv.item.lParam = (LPARAM)n;
+						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
+					}
+				}
+				{
+					node* n = new node_sound(0);
+					if (n) {
+						TV_INSERTSTRUCT tv = { 0 };
+						tv.hParent = hRootItem;
+						tv.hInsertAfter = TVI_LAST;
+						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+						tv.item.pszText = n->name;
+						tv.item.iImage = 2;
+						tv.item.iSelectedImage = 3;
+						tv.item.lParam = (LPARAM)n;
+						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
+					}
+				}
+				{
+					node* n = new node_beep(0);
 					if (n) {
 						TV_INSERTSTRUCT tv = { 0 };
 						tv.hParent = hRootItem;

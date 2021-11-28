@@ -166,9 +166,11 @@
     <ClCompile Include="graphic.cpp" />
     <ClCompile Include="mode.cpp" />
     <ClCompile Include="node.cpp" />
+    <ClCompile Include="node_beep.cpp" />
     <ClCompile Include="node_end.cpp" />
     <ClCompile Include="node_if.cpp" />
     <ClCompile Include="node_output.cpp" />
+    <ClCompile Include="node_sound.cpp" />
     <ClCompile Include="node_start.cpp" />
     <ClCompile Include="node_timer.cpp" />
     <ClCompile Include="object.cpp" />
@@ -177,6 +179,7 @@
     <ClCompile Include="propertyitem.cpp" />
     <ClCompile Include="propertyitemlist.cpp" />
     <ClCompile Include="size.cpp" />
+    <ClCompile Include="sound.cpp" />
     <ClCompile Include="Source.cpp" />
     <ClCompile Include="trans.cpp" />
     <ClCompile Include="util.cpp" />
@@ -189,9 +192,11 @@
     <ClInclude Include="graphic.h" />
     <ClInclude Include="mode.h" />
     <ClInclude Include="node.h" />
+    <ClInclude Include="node_beep.h" />
     <ClInclude Include="node_end.h" />
     <ClInclude Include="node_if.h" />
     <ClInclude Include="node_output.h" />
+    <ClInclude Include="node_sound.h" />
     <ClInclude Include="node_start.h" />
     <ClInclude Include="node_timer.h" />
     <ClInclude Include="object.h" />
@@ -201,6 +206,7 @@
     <ClInclude Include="propertyitemlist.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="size.h" />
+    <ClInclude Include="sound.h" />
     <ClInclude Include="trans.h" />
     <ClInclude Include="util.h" />
   </ItemGroup>

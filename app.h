@@ -1005,7 +1005,7 @@ public:
 	void Error(LPCWSTR lpszMessage) {
 		if (g_c.hMainWnd && IsWindow(g_c.hMainWnd))
 		{
-			MessageBox(g_c.hMainWnd, lpszMessage, 0, 0);
+			MessageBox(g_c.hMainWnd, lpszMessage, 0, MB_ICONERROR);
 		}
 	}
 
@@ -1026,14 +1026,14 @@ public:
 							start = n;
 						}
 						else {
-							a->Error(L"2つ以上開始ノードが配置されています。開始ノードは1つのみにしてください。");
+							a->Error(L"「開始」が2つ以上配置されています。「開始」は1つのみにしてください。");
 							goto EXIT0;
 						}
 					}
 				}
 			}
 			if (start == 0) {
-				a->Error(L"開始ノードが見つかりませんでした。開始ノードを配置してください。");
+				a->Error(L"「開始」が見つかりませんでした。「開始」を配置してください。");
 				goto EXIT0;
 			}
 			bIsEndNodeLast = false;
