@@ -30,6 +30,7 @@
 #include "node_if.h"
 #include "node_sound.h"
 #include "node_beep.h"
+#include "variable.h"
 #include "resource.h"
 
 #if _DEBUG
@@ -301,8 +302,31 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 			}
 			// 子ノード1
 			if (hRootItem) {
-				{
-					node* n = new node_output(0);
+				for (int i = 0; ; i++) {
+					node* n = 0;
+					switch (i) {
+					case 0:
+						n = new node_start(0);
+						break;
+					case 1:
+						n = new node_end(0);
+						break;
+					case 2:
+						n = new node_timer(0);
+						break;
+					case 3:
+						n = new node_if(0);
+						break;
+					case 4:
+						n = new node_sound(0);
+						break;
+					case 5:
+						n = new node_output(0);
+						break;
+					case 6:
+						n = new node_beep(0);
+						break;
+					}
 					if (n) {
 						TV_INSERTSTRUCT tv = { 0 };
 						tv.hParent = hRootItem;
@@ -314,89 +338,8 @@ INT_PTR CALLBACK NodeBoxDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARA
 						tv.item.lParam = (LPARAM)n;
 						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
 					}
-				}
-				{
-					node* n = new node_start(0);
-					if (n) {
-						TV_INSERTSTRUCT tv = { 0 };
-						tv.hParent = hRootItem;
-						tv.hInsertAfter = TVI_LAST;
-						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
-						tv.item.pszText = n->name;
-						tv.item.iImage = 2;
-						tv.item.iSelectedImage = 3;
-						tv.item.lParam = (LPARAM)n;
-						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
-					}
-				}
-				{
-					node* n = new node_end(0);
-					if (n) {
-						TV_INSERTSTRUCT tv = { 0 };
-						tv.hParent = hRootItem;
-						tv.hInsertAfter = TVI_LAST;
-						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
-						tv.item.pszText = n->name;
-						tv.item.iImage = 2;
-						tv.item.iSelectedImage = 3;
-						tv.item.lParam = (LPARAM)n;
-						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
-					}
-				}
-				{
-					node* n = new node_timer(0);
-					if (n) {
-						TV_INSERTSTRUCT tv = { 0 };
-						tv.hParent = hRootItem;
-						tv.hInsertAfter = TVI_LAST;
-						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
-						tv.item.pszText = n->name;
-						tv.item.iImage = 2;
-						tv.item.iSelectedImage = 3;
-						tv.item.lParam = (LPARAM)n;
-						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
-					}
-				}
-				{
-					node* n = new node_if(0);
-					if (n) {
-						TV_INSERTSTRUCT tv = { 0 };
-						tv.hParent = hRootItem;
-						tv.hInsertAfter = TVI_LAST;
-						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
-						tv.item.pszText = n->name;
-						tv.item.iImage = 2;
-						tv.item.iSelectedImage = 3;
-						tv.item.lParam = (LPARAM)n;
-						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
-					}
-				}
-				{
-					node* n = new node_sound(0);
-					if (n) {
-						TV_INSERTSTRUCT tv = { 0 };
-						tv.hParent = hRootItem;
-						tv.hInsertAfter = TVI_LAST;
-						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
-						tv.item.pszText = n->name;
-						tv.item.iImage = 2;
-						tv.item.iSelectedImage = 3;
-						tv.item.lParam = (LPARAM)n;
-						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
-					}
-				}
-				{
-					node* n = new node_beep(0);
-					if (n) {
-						TV_INSERTSTRUCT tv = { 0 };
-						tv.hParent = hRootItem;
-						tv.hInsertAfter = TVI_LAST;
-						tv.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
-						tv.item.pszText = n->name;
-						tv.item.iImage = 2;
-						tv.item.iSelectedImage = 3;
-						tv.item.lParam = (LPARAM)n;
-						HTREEITEM hItem = TreeView_InsertItem(hTree, &tv);
+					else {
+						break;
 					}
 				}
 				TreeView_Expand(hTree, hRootItem, TVE_EXPAND);
@@ -522,54 +465,70 @@ INT_PTR CALLBACK SettingsDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPAR
 	return FALSE;
 }
 
+INT_PTR CALLBACK CreateVariableDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARAM lParam)
+{
+	static variable* v;
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+		v = (variable*)lParam;
+		return TRUE;
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK) {
+			DWORD dwSize = GetWindowTextLength(GetDlgItem(hWnd, IDC_EDIT1));
+			LPWSTR lpszName = (LPWSTR)GlobalAlloc(0, sizeof(WCHAR) * (dwSize + 1));
+			GetDlgItemText(hWnd, IDC_EDIT1, lpszName, dwSize + 1);
+			v->name = lpszName;
+			GlobalFree(lpszName);
+
+			EndDialog(hWnd, LOWORD(wParam));
+			return TRUE;
+		}
+		else if (LOWORD(wParam) == IDCANCEL) {
+			EndDialog(hWnd, LOWORD(wParam));
+			return TRUE;
+		}
+		break;
+	}
+	return FALSE;
+}
+
 INT_PTR CALLBACK VariableListDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, LPARAM lParam)
 {
 	static app* pNoCodeApp;
+	static HWND hButtonCreate;
+	static HWND hButtonDelete;
 	static HWND hList;
 	static HWND hEdit;
 	switch (msg)
 	{
 	case WM_INITDIALOG:
 		pNoCodeApp = (app*)lParam;
-		{
-			hList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, 0, WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_EDITLABELS, 0, 0, 0, 0, hWnd, (HMENU)1000, GetModuleHandle(0), NULL);
-			LV_COLUMN lvcol;
-			LV_ITEM item;
-			lvcol.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
-			lvcol.fmt = LVCFMT_LEFT;
-			lvcol.cx = 128;
-			lvcol.pszText = TEXT("変数名");
-			lvcol.iSubItem = 0;
-			SendMessage(hList, LVM_INSERTCOLUMN, 0, (LPARAM)&lvcol);
-			lvcol.fmt = LVCFMT_LEFT;
-			lvcol.cx = 128;
-			lvcol.pszText = TEXT("値");
-			lvcol.iSubItem = 1;
-			SendMessage(hList, LVM_INSERTCOLUMN, 1, (LPARAM)&lvcol);
-			item.mask = LVIF_TEXT;
-			{
-				TCHAR szText[50];
-				for (int i = 0; i < 128; i++)
-				{
-					wsprintf(szText, TEXT("アイテム %d"), i);
-					item.pszText = szText;
-					item.iItem = i;
-					item.iSubItem = 0;
-					item.iImage = i % 4;
-					SendMessage(hList, LVM_INSERTITEM, 0, (LPARAM)&item);
-					wsprintf(szText, TEXT("%d"), i);
-					item.pszText = szText;
-					item.iItem = i;
-					item.iSubItem = 1;
-					SendMessage(hList, LVM_SETITEM, 0, (LPARAM)&item);
-				}
+		if (pNoCodeApp) {
+			hButtonCreate = CreateWindow(L"BUTTON", L"+", WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWnd, (HMENU)1000, GetModuleHandle(0), NULL);
+			hButtonDelete = CreateWindow(L"BUTTON", L"-", WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWnd, (HMENU)1001, GetModuleHandle(0), NULL);
+			hList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, 0, WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_EDITLABELS, 0, 0, 0, 0, hWnd, (HMENU)1002, GetModuleHandle(0), NULL);
+			if (hList) {
+				LV_COLUMN lvcol;
+				lvcol.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
+				lvcol.fmt = LVCFMT_LEFT;
+				lvcol.cx = 128;
+				lvcol.pszText = TEXT("変数名");
+				lvcol.iSubItem = 0;
+				SendMessage(hList, LVM_INSERTCOLUMN, 0, (LPARAM)&lvcol);
+				lvcol.fmt = LVCFMT_LEFT;
+				lvcol.cx = 128;
+				lvcol.pszText = TEXT("値");
+				lvcol.iSubItem = 1;
+				SendMessage(hList, LVM_INSERTCOLUMN, 1, (LPARAM)&lvcol);
+				SendMessage(hWnd, WM_APP, 0, 0);
+				ListView_SetExtendedListViewStyle(hList, LVS_EX_TWOCLICKACTIVATE);
 			}
-			ListView_SetExtendedListViewStyle(hList, LVS_EX_TWOCLICKACTIVATE);
 		}
 		EnumChildWindows(hWnd, util::EnumChildSetFontProc, 0);
 		return TRUE;
 	case WM_NOTIFY:
-		if (LOWORD(wParam) == 1000)
+		if (LOWORD(wParam) == 1002)
 		{
 			switch (((LV_DISPINFO*)lParam)->hdr.code)
 			{
@@ -599,8 +558,44 @@ INT_PTR CALLBACK VariableListDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, 
 			}
 		}
 		break;
+	case WM_COMMAND:
+		if (LOWORD(wParam) == 1000) {
+			variable* v = new variable(0);
+			if (DialogBoxParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_CREATE_VARIABLE), hWnd, CreateVariableDialogProc, (LPARAM)v) == IDOK) {
+				pNoCodeApp->OnCreateVariable(v);
+			}
+			else {
+				delete v;
+			}
+		}
+		break;
+	case WM_APP://updata
+		{
+			SendMessage(hList, LVM_DELETEALLITEMS, 0, 0);
+			LV_ITEM item;
+			item.mask = LVIF_TEXT;
+			int index = 0;
+			for (auto i : pNoCodeApp->nl.l) {
+				if (!i->isalive(pNoCodeApp->generation)) continue;
+				if (i->getobjectkind() != OBJECT_VARIABLE) continue;
+				auto v = (variable*)i;
+				item.pszText = (LPWSTR)v->name.c_str();
+				item.iItem = index;
+				item.iSubItem = 0;
+				item.iImage = index % 4;
+				SendMessage(hList, LVM_INSERTITEM, 0, (LPARAM)&item);
+				item.pszText = v->displayValue();
+				item.iItem = index;
+				item.iSubItem = 1;
+				SendMessage(hList, LVM_SETITEM, 0, (LPARAM)&item);
+				index++;
+			}
+		}
+		break;
 	case WM_SIZE:
-		MoveWindow(hList, POINT2PIXEL(4), POINT2PIXEL(4), LOWORD(lParam) - POINT2PIXEL(8), HIWORD(lParam) - POINT2PIXEL(8), TRUE);
+		MoveWindow(hButtonCreate, POINT2PIXEL(2), POINT2PIXEL(2), POINT2PIXEL(50), POINT2PIXEL(20), TRUE);
+		MoveWindow(hButtonDelete, POINT2PIXEL(54), POINT2PIXEL(2), POINT2PIXEL(50), POINT2PIXEL(20), TRUE);
+		MoveWindow(hList, POINT2PIXEL(2), POINT2PIXEL(24), LOWORD(lParam) - POINT2PIXEL(4), HIWORD(lParam) - POINT2PIXEL(26), TRUE);
 		break;
 	}
 	return FALSE;

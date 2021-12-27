@@ -183,6 +183,7 @@
     <ClCompile Include="Source.cpp" />
     <ClCompile Include="trans.cpp" />
     <ClCompile Include="util.cpp" />
+    <ClCompile Include="variable.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="app.h" />
@@ -209,6 +210,7 @@
     <ClInclude Include="sound.h" />
     <ClInclude Include="trans.h" />
     <ClInclude Include="util.h" />
+    <ClInclude Include="variable.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="nocode.rc" />

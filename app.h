@@ -13,6 +13,7 @@
 #include "node.h"
 #include "common.h"
 #include "util.h"
+#include "variable.h"
 #include "resource.h"
 
 #if _DEBUG
@@ -765,6 +766,12 @@ public:
 				RefreshToolBar();
 			}
 		}
+	}
+
+	void OnCreateVariable(variable *v) {
+		beginedit();
+		nl.add(v);
+		SendMessage(g_c.hVariableList, WM_APP, 0, 0);
 	}
 
 	BOOL IsHighlightText(LPCWSTR lpszText)
