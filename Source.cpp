@@ -472,6 +472,28 @@ INT_PTR CALLBACK CreateVariableDialogProc(HWND hWnd, unsigned msg, WPARAM wParam
 	{
 	case WM_INITDIALOG:
 		v = (variable*)lParam;
+
+		{
+			RECT rect;
+			GetWindowRect(GetParent(hWnd), &rect);
+			SetWindowPos(hWnd, 0, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOREDRAW);
+		}
+
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)L"値が設定されていない");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)L"値が設定されていない");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)L"値が設定されていない");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)L"値が設定されていない");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)L"値が設定されていない");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)L"値が設定されていない");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)L"値が設定されていない");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)L"値が設定されていない");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)L"値が設定されていない");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)L"値が設定されていない");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)L"値が設定されていない");
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)L"値が設定されていない");
+
+		SendDlgItemMessage(hWnd, IDC_COMBO1, CB_SETCURSEL, 0, 0);
+
 		return TRUE;
 	case WM_COMMAND:
 		if (LOWORD(wParam) == IDOK) {
@@ -500,6 +522,9 @@ INT_PTR CALLBACK VariableListDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, 
 	static HWND hButtonDelete;
 	static HWND hList;
 	static HWND hEdit;
+	static int m_nRow;
+	static int m_nCol;
+
 	switch (msg)
 	{
 	case WM_INITDIALOG:
@@ -509,7 +534,7 @@ INT_PTR CALLBACK VariableListDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, 
 			hButtonDelete = CreateWindow(L"BUTTON", L"-", WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hWnd, (HMENU)1001, GetModuleHandle(0), NULL);
 			hList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTVIEW, 0, WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_EDITLABELS, 0, 0, 0, 0, hWnd, (HMENU)1002, GetModuleHandle(0), NULL);
 			if (hList) {
-				LV_COLUMN lvcol;
+				LV_COLUMN lvcol = {};
 				lvcol.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
 				lvcol.fmt = LVCFMT_LEFT;
 				lvcol.cx = 128;
@@ -532,17 +557,49 @@ INT_PTR CALLBACK VariableListDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, 
 		{
 			switch (((LV_DISPINFO*)lParam)->hdr.code)
 			{
+			case NM_CLICK:
+				{
+					auto lpnmia = (LPNMITEMACTIVATE)lParam;
+					m_nRow = lpnmia->iItem;
+					m_nCol = lpnmia->iSubItem;
+				}
+				break;
+			case NM_DBLCLK:
+				{
+					//ListView_EditLabel(hList, m_nRow);
+					ListView_EditLabel(hList, ListView_GetNextItem(hList, -1, LVNI_FOCUSED));
+				}
+				break;
 			case LVN_KEYDOWN:
 				if (((NMLVKEYDOWN*)lParam)->wVKey == VK_F2)
 				{
 					ListView_EditLabel(hList, ListView_GetNextItem(hList, -1, LVNI_FOCUSED));
 				}
 				break;
-			case LVN_ITEMACTIVATE:
-				ListView_EditLabel(hList, ListView_GetNextItem(hList, -1, LVNI_FOCUSED));
-				break;
+			//case LVN_ITEMACTIVATE:
+			//	{
+			//		auto lpnmia = (LPNMITEMACTIVATE)lParam;
+
+
+			//		RECT rect;
+			//		if (ListView_GetSubItemRect(hList, m_nRow, m_nCol, LVIR_LABEL, &rect))
+			//		{
+			//			hEdit = ListView_GetEditControl(hList);
+			//			MoveWindow(hEdit, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, FALSE);
+			//		}
+			//	}
+			//	ListView_EditLabel(hList, ListView_GetNextItem(hList, -1, LVNI_FOCUSED));
+			//	break;
 			case LVN_BEGINLABELEDIT:    //アイテム編集を開始
-				hEdit = ListView_GetEditControl(hList);
+				{
+					hEdit = ListView_GetEditControl(hList);
+
+					RECT rect;
+					if (ListView_GetSubItemRect(hList, m_nRow, m_nCol, LVIR_LABEL, &rect))
+					{
+						MoveWindow(hEdit, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, FALSE);
+					}
+				}
 				break;
 			case LVN_ENDLABELEDIT:
 				{
@@ -572,7 +629,7 @@ INT_PTR CALLBACK VariableListDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, 
 	case WM_APP://updata
 		{
 			SendMessage(hList, LVM_DELETEALLITEMS, 0, 0);
-			LV_ITEM item;
+			LV_ITEM item = {};
 			item.mask = LVIF_TEXT;
 			int index = 0;
 			for (auto i : pNoCodeApp->nl.l) {
@@ -582,7 +639,6 @@ INT_PTR CALLBACK VariableListDialogProc(HWND hWnd, unsigned msg, WPARAM wParam, 
 				item.pszText = (LPWSTR)v->name.c_str();
 				item.iItem = index;
 				item.iSubItem = 0;
-				item.iImage = index % 4;
 				SendMessage(hList, LVM_INSERTITEM, 0, (LPARAM)&item);
 				item.pszText = v->displayValue();
 				item.iItem = index;
